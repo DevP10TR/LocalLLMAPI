@@ -966,8 +966,9 @@ const DOC_ENDPOINTS = [
   ['get', '/docs', false, 'docs_e_swagger'],
 ];
 
-/* Statusy zweryfikowane przeciwko backendowi w tools/test_backend.py
-   ("kontrakt dokumentacji") — nie zmieniaj ich bez aktualizacji testu. */
+/* Statusy zweryfikowane przeciwko backendowi — to jest kontrakt: każdy z nich
+   musi odpowiadać temu, co API faktycznie zwraca. Zmiana kodu HTTP bez
+   aktualizacji tej tabeli wprowadza w dokumentacji kłamstwo. */
 const DOC_ERRORS = [
   ['400', '400', 'docs_x_400'],
   ['401', '401', 'docs_x_401'],

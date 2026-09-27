@@ -5,6 +5,10 @@
 We as members, contributors, and leaders pledge to make participation in our community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
 We pledge to act and interact in ways that contribute to an open, welcoming, diverse, inclusive, and healthy community.
+
+LocalLLMAPI is a small self-hosted tool, so most interaction happens in issue
+threads. The same standards apply there as anywhere else: assume good faith,
+stay technical, and leave the code better than you found it.
 ## Our Standards
 
 Examples of behavior that contributes to a positive environment for our community include:
@@ -26,6 +30,21 @@ Examples of unacceptable behavior include:
 ## Enforcement Responsibilities
 
 Community leaders are responsible for clarifying and enforcing our standards of acceptable behavior and will take appropriate and fair corrective action in response to any behavior that they deem inappropriate, threatening, offensive, or harmful.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported to the maintainers by opening a confidential report through the
+repository's **Security** tab on GitHub, or by opening an issue if the matter
+is not sensitive. Reports are handled confidentially and reviewed promptly.
+Inappropriate behaviour may result in a temporary or permanent ban from any
+sort of interaction with the project.
+
+## Scope
+
+This Code of Conduct applies within all project spaces — the issue tracker,
+commit history, and any discussion about the project — and also applies when
+an individual is officially representing the project in public spaces.
 
 ## Attribution
 

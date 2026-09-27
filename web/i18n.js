@@ -1,9 +1,9 @@
 /* ==========================================================================
    LocalLLMAPI — tłumaczenia (PL / EN)
 
-   ZASADA: oba słowniki MUSZĄ mieć identyczny zestaw kluczy. Audyt
-   (tools/check_i18n.py) sprawdza każdy język osobno — błąd, na który
-   trafiliśmy, to 7 kluczy obecnych tylko w `pl`, przez co w angielskim UI
+   ZASADA: oba słowniki MUSZĄ mieć identyczny zestaw kluczy. Brak klucza
+   w jednym języku renderuje nazwę klucza zamiast tekstu — trafiło się na to
+   przy 7 kluczach obecnych tylko w `pl`, przez co w angielskim UI
    pojawiało się "65d time_ago" zamiast "65d ago".
 
    Kolejność bloków nie ma znaczenia, ale `en` idzie pierwszy, bo to

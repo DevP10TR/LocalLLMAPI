@@ -9,11 +9,10 @@ Runs on **port 1000**.
 
 ## Features
 
-- **OpenAI API compatibility** — works out of the box with the official
-  Python/JS clients, LangChain, Open WebUI and anything else that speaks the
-  OpenAI protocol.
+- **OpenAI API compatibility** — works with the official Python/JS clients,
+  LangChain, Open WebUI and anything else that speaks the OpenAI protocol.
 - **Home dashboard** — last used model, total tokens, request count, average
-  and best tokens/s, models on disk, uptime, slot occupancy and recent requests.
+  and best tokens/s, models on disk, uptime, slot occupancy, recent requests.
 - **3 model slots** — each bound to a different device (`Vulkan` / `CUDA` /
   `CPU`). Models are routed into the slot matching the API key's engine.
 - **No duplicate loads** — concurrent requests for the same model share a
@@ -24,36 +23,55 @@ Runs on **port 1000**.
   track token usage per key.
 - **Detailed logging** — every request is recorded with TTFT, duration, token
   count and tokens/s (avg / min / max), plus a 24-hour chart.
-- **In-app documentation** — the **Docs** tab explains how to reload a model,
-  what to send to the API, every endpoint and every error, with runnable
-  examples filled in with your address and key.
+- **In-app documentation** — the **Docs** tab covers reloading a model, what to
+  send to the API, every endpoint and every error, with runnable examples
+  filled in with your address and key.
 - **Collapsible sidebar** — click the logo (or `Ctrl`/`Cmd`+`B`) to collapse it
   to icons. The state persists.
 - **Light & dark theme** — follows your OS preference, with a manual toggle.
 - **Polish / English** — switchable from the Settings tab.
 - **Works offline** — Chart.js, the Tabler icon font and every asset are served
-  locally. No CDN, no internet required.
+  locally. No CDN, no internet required once installed.
 
 ## Requirements
 
 - **Python 3.10+**
 - A `.gguf` model in `models/` (a small test model downloads automatically if
   the folder is empty)
-- Optional: a GPU with Vulkan or CUDA for acceleration
+- A C++ compiler — `llama-cpp-python` is built from source
+- For GPU acceleration: the **Vulkan SDK** (recommended) or CUDA
 
 ## Getting started
 
+**1. Install Vulkan** — download the [Vulkan SDK](https://vulkan.lunarg.com/)
+and make sure a C++ compiler is available (Visual Studio Build Tools on
+Windows).
+
+**2. Install the dependencies**
+
 ```bat
-install_vulkan.bat
+pip install -r requirements.txt
 ```
 
-Put your `.gguf` models into `models/`, then:
+Then build `llama-cpp-python` with the backend you want. Vulkan:
+
+```bat
+set CMAKE_ARGS=-DGGML_VULKAN=on
+pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir
+```
+
+For CUDA, set `CMAKE_ARGS=-DGGML_CUDA=on` instead. For CPU-only, plain
+`pip install llama-cpp-python` works.
+
+**3. Add a model** — put your `.gguf` files in `models/`.
+
+**4. Run it**
 
 ```bat
 start.bat
 ```
 
-That's it — the server starts and the dashboard opens at
+That's it. The server starts and the dashboard opens at
 <http://localhost:1000>. Close the window or press `Ctrl`+`C` to stop.
 
 ## Connecting an app
@@ -77,14 +95,15 @@ for chunk in stream:
 ```
 
 The **Connection** tab shows ready-made snippets for Python, cURL and
-JavaScript with your LAN address already filled in. The **Docs** tab covers
-parameter reference, every endpoint and every error code.
+JavaScript with your LAN address already filled in. The **Docs** tab has the
+parameter reference, every endpoint and every error code — with a `curl`
+command you can copy and run as-is.
 
 ## Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/v1/chat/completions` | Chat completion (streaming and non-streaming) — requires a key |
+| `POST` | `/v1/chat/completions` | Chat completion, streaming and non-streaming — requires a key |
 | `GET` | `/v1/models` | List of available models |
 | `GET` | `/api/status` | Loaded models, slots, uptime, local IP |
 | `GET` | `/api/stats` | Aggregates for the Home dashboard |
@@ -94,29 +113,26 @@ parameter reference, every endpoint and every error code.
 | `POST` | `/api/unload` | Free models from memory |
 | `GET` | `/docs` | Interactive OpenAPI reference |
 
-## Development
+## Files
 
-```bat
-pip install -r requirements.txt
-npm install                     :: jsdom, only for the interaction tests
+```
+start.bat              launches the server
+requirements.txt       dependencies
+backend/               server, database, model discovery
+web/                   the dashboard (plain HTML, CSS and JS — no build step)
+models/                your .gguf files
+logs.db                your API keys and request history
 ```
 
-```bat
-python tools\test_backend.py    :: 40 tests: event loop, duplicate loads, refcount, slots, CORS, docs contract
-node tools\test_keys.js         :: 181 tests: every button, sidebar rail, tooltips, documentation
-node tools\test_frontend.js     :: 57 tests: syntax, i18n, icons, XSS, port, offline assets
-python tools\check_frontend.py  :: HTML/JS consistency: ids, i18n keys, icons
-python tools\check_i18n.py      :: per-language key completeness, dead keys
-```
-
-`tools/icon-preview.html` shows the app icon candidates at 16/32/180 px on
-both backgrounds.
+`models/` and `logs.db` are yours — they are not tracked by git, and deleting
+`logs.db` deletes your keys.
 
 ## Security note
 
-The panel endpoints under `/api/*` are not authenticated — anyone who can
-reach port 1000 on your network can create and delete keys. Bind to
-`127.0.0.1` if that matters to you.
+The panel endpoints under `/api/*` are not authenticated. Anyone who can
+reach port 1000 on your network can create and delete keys. To restrict that,
+change the host in `start.bat` from `0.0.0.0` to `127.0.0.1` and use a
+firewall or an SSH tunnel for remote access.
 
 ## License
 

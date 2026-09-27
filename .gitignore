@@ -23,23 +23,16 @@ server.log
 env/
 venv/
 ENV/
-env.bak/
-venv.bak/
 
-# Node (tylko dev: jsdom do testow interakcji)
+# Tooling state
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
 node_modules/
-
-# IDEs and Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Tooling state
-.ruff_cache/
-.cmdai_code_project/
-.pytest_cache/
-.mypy_cache/
 
 # MacOS
 .DS_Store
