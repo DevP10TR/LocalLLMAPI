@@ -28,6 +28,7 @@ const DICT = {
     nav_keys: 'API Keys',
     nav_logs: 'API Logs',
     nav_connect: 'Connection',
+    nav_docs: 'Docs',
     nav_settings: 'Settings',
     status_connecting: 'Connecting…',
     topbar_api: 'API',
@@ -36,6 +37,7 @@ const DICT = {
     sub_keys: 'Keys to track usage per application',
     sub_logs: 'Request history and usage chart',
     sub_connect: 'Connect your app to this router',
+    sub_docs: 'Reload models, send requests, endpoints and errors',
     sub_settings: 'Slots, theme and panel language',
 
     /* --- home --- */
@@ -238,6 +240,7 @@ const DICT = {
     nav_keys: 'Klucze API',
     nav_logs: 'Logi API',
     nav_connect: 'Połączenie',
+    nav_docs: 'Dokumentacja',
     nav_settings: 'Ustawienia',
     status_connecting: 'Łączenie…',
     topbar_api: 'API',
@@ -246,6 +249,7 @@ const DICT = {
     sub_keys: 'Klucze do śledzenia zużycia per aplikacja',
     sub_logs: 'Historia requestów i wykres zużycia',
     sub_connect: 'Jak połączyć aplikację do tego routera',
+    sub_docs: 'Przeładowanie modeli, zapytania, endpointy i błędy',
     sub_settings: 'Sloty, motyw i język panelu',
 
     /* --- home --- */
@@ -500,7 +504,6 @@ function setLanguage(next) {
   api.renderDocs();
   api.loadStats();
 }
-
 window.t = t;
 window.setLanguage = setLanguage;
 window.translateUI = translateUI;

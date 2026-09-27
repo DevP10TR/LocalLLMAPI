@@ -36,5 +36,11 @@ package-lock.json
 *.swp
 *.swo
 
+# Tooling state
+.ruff_cache/
+.cmdai_code_project/
+.pytest_cache/
+.mypy_cache/
+
 # MacOS
 .DS_Store

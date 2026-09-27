@@ -272,7 +272,7 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
 
   /* ---------- 13. Inne zakladki ---------- */
   console.log('\n[13] Pozostale zakladki');
-  for (const tab of ['home', 'models', 'logs', 'connect', 'settings']) {
+  for (const tab of ['home', 'models', 'logs', 'connect', 'docs', 'settings']) {
     const nav = $(`.nav-item[data-tab="${tab}"]`);
     nav.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     await sleep(350);
@@ -525,9 +525,10 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
     $$('[data-tip]').map((n) => n.dataset.tip).join(' | '));
   check('kazdy element z data-tip ma niepusta tresc',
     $$('[data-tip]').every((n) => (n.dataset.tip || '').trim().length > 0));
-  check('wszystkie 6 pozycji nawigacji ma tooltip',
+  check('wszystkie 7 pozycji nawigacji ma tooltip',
+    $$('.nav-item[data-tab]').length === 7 &&
     $$('.nav-item[data-tab]').every((n) => (n.dataset.tip || '').trim().length > 0),
-    `${$$('.nav-item[data-tab]').filter((n) => !n.dataset.tip).length} bez tooltipa`);
+    `${$$('.nav-item[data-tab]').length} pozycji, ${$$('.nav-item[data-tab]').filter((n) => !n.dataset.tip).length} bez tooltipa`);
   check('tooltip logo = akcja w danym stanie',
     tipOf('#nav-toggle') === 'Collapse sidebar', tipOf('#nav-toggle'));
   check('tooltip kropki statusu nie jest kluczem',
@@ -589,19 +590,28 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
     String(fresh.window.localStorage.getItem('llmapi.rail')));
   fresh.window.close();
 
-  // DOKUMENTACJA
-  console.log('\n[18] Dokumentacja w Ustawieniach');
-  $('.nav-item[data-tab="settings"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await sleep(600);
+  // DOKUMENTACJA — osobna zakladka
+  console.log('\n[18] Dokumentacja (osobna zakladka)');
+  const docsNav = $('.nav-item[data-tab="docs"]');
+  check('pozycja Docs jest w nawigacji', !!docsNav,
+    docsNav ? docsNav.textContent.trim() : 'brak');
+  check('Docs ma panel #docs', !!$('#docs'));
+  check('Docs NIE sa w zakladce Ustawienia',
+    $('#docs-card') === null && $('#settings').querySelector('.doc-sec') === null);
+  check('panel #docs nie jest zagniezdzony w panelu Ustawienia',
+    !$('#settings').contains($('#docs')) && $('#docs').id === 'docs');
+  check('Docs sa rodzenstwem Ustawienia (oba w .scroll), nie dzieckiem',
+    $('#docs').parentElement === $('#settings').parentElement);
 
-  const docs = $('#docs-card');
-  check('karta Docs istnieje', !!docs);
-  check('karta Docs widoczna', docs && window.getComputedStyle(docs).display !== 'none');
-  // compareDocumentPosition: 2 = PRECEDING, czyli target jest PRZED docs,
-  // a wiec karta Docs lezy nizej — dokladnie to, o co prosimy.
-  const loadedPos = docs.compareDocumentPosition($('#loaded-models-container'));
-  check('Docs sa POD sekcja slotow i jezyka', (loadedPos & 2) === 2,
-    `compareDocumentPosition=${loadedPos} (oczekiwano bitu 2 = PRECEDING)`);
+  docsNav.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await sleep(700);
+  const docs = $('#docs');
+  check('zakladka Docs otwiera sie',
+    window.getComputedStyle(docs).display !== 'none' &&
+    window.getComputedStyle($('#settings')).display === 'none');
+  check('naglowek strony to Docs', $('#page-title').textContent.trim() === 'Docs',
+    `"${$('#page-title').textContent}"`);
+  check('podtytul wypelniony', $('#page-sub').textContent.length > 0, $('#page-sub').textContent);
 
   const secTitles = [...docs.querySelectorAll('.doc-sec h4 span')].map((n) => n.textContent.trim());
   check('4 sekcje dokumentacji', secTitles.length === 4, secTitles.join(' | '));
@@ -609,6 +619,9 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
   check('sekcja o wysylaniu zapytania', /[Ss]ending|Wysyłanie/.test(secTitles[1]), secTitles[1]);
   check('sekcja endpointow', /[Ee]ndpoint/.test(secTitles[2]), secTitles[2]);
   check('sekcja bledow', /[Ee]rror|Błęd/.test(secTitles[3]), secTitles[3]);
+  check('opis przeładowania wspomina auto-zwalnianie',
+    /2 min|2 min/.test(docs.querySelector('.doc-sec p').textContent),
+    docs.querySelector('.doc-sec p').textContent.slice(0, 60) + '…');
 
   // Zadne klucze i18n nie powinny byc widoczne jako tekst
   const docsText = docs.textContent;

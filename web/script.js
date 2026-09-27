@@ -182,7 +182,8 @@ function showTab(name, push = true) {
   stagger(panel);
   if (push && location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
 
-  if (name === 'settings') { loadSlots(); loadLoadedModels(); renderDocs(); }
+  if (name === 'settings') { loadSlots(); loadLoadedModels(); }
+  if (name === 'docs') renderDocs();
   if (name === 'home') loadStats();
   refresh(true);
 }
@@ -1040,7 +1041,7 @@ function renderDocs() {
   )));
 }
 
-$('#docs-card').addEventListener('click', (e) => {
+$('#docs').addEventListener('click', (e) => {
   const code = e.target.closest('code.copyable');
   if (code) copyAndToast(code.textContent, code);
 });
@@ -1131,7 +1132,8 @@ async function poll() {
       setStatus(true, `${status.local_ip}:${status.port}`);
       updateServerIp(status.local_ip);
       if (JSON.stringify(keys) !== JSON.stringify(keysCache)) renderKeys(keys);
-      if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); renderDocs(); }
+      if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); }
+      if (currentTab === 'docs') renderDocs();
       if (currentLogKey) await loadLogs();
     }
     failures = 0;
@@ -1149,7 +1151,8 @@ $('#refresh-now').addEventListener('click', async (e) => {
   keysCache = [];
   await refresh(true);
   if (currentLogKey) await loadLogs();
-  if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); renderDocs(); }
+  if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); }
+  if (currentTab === 'docs') renderDocs();
   btn.classList.remove('is-spinning');
 });
 
@@ -1174,7 +1177,8 @@ function start() {
   $$('.lang-btn').forEach((b) => b.addEventListener('click', () => setLanguage(b.dataset.lang)));
 
   const initial = location.hash.replace('#', '');
-  showTab(['home', 'models', 'keys', 'logs', 'connect', 'settings'].includes(initial) ? initial : 'home', false);
+  const TABS = ['home', 'models', 'keys', 'logs', 'connect', 'docs', 'settings'];
+  showTab(TABS.includes(initial) ? initial : 'home', false);
 
   renderEndpoints();
   renderCode();

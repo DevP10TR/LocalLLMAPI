@@ -2,5 +2,6 @@ fastapi
 uvicorn[standard]
 pydantic
 huggingface-hub
+tiktoken
 # llama-cpp-python musi zostać zainstalowane ręcznie z flagami dla Vulkana (zobacz install_vulkan.bat)
 llama-cpp-python

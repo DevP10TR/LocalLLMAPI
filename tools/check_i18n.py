@@ -29,8 +29,11 @@ used |= set(re.findall(r"\bt\('([a-z0-9_]+)'", js))
 # Klucze skladane dynamicznie — regex ich nie widzi, wiec sa wypisane:
 #   t(`sub_${name}`) w showTab()
 #   t(collapsed ? 'nav_expand' : 'nav_collapse') w applyRail()
+# Lista zakladek brana z HTML, a nie zahardkodowana — inaczej dodanie nowej
+# zakladki oznaczaloby "martwy klucz" dla jej sub_*.
+tabs = re.findall(r'class="nav-item[^"]*" data-tab="([^"]+)"', html)
 DYNAMIC = {
-    *(f"sub_{n}" for n in ("home", "models", "keys", "logs", "connect", "settings")),
+    *(f"sub_{t}" for t in tabs),
     "nav_expand",
     "nav_collapse",
     # Klucze dokumentacji budowane z tablic w script.js (DOC_PARAMS,
