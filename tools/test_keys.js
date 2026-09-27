@@ -41,6 +41,11 @@ const vc = new VirtualConsole();
 const consoleErrors = [];
 vc.on('jsdomError', (e) => consoleErrors.push(`${e.message || e}\n${(e.stack || '').split('\n').slice(1, 5).join('\n')}`));
 vc.on('error', (...a) => consoleErrors.push(a.map(String).join(' ')));
+/* console.error tez jest bledem — bez tego loadStats() wywalajacy sie
+   na brakujacym wierzchu byl cichy i UI zostawalo na szkielet. */
+vc.on('warn', (...a) => consoleErrors.push(`[warn] ${a.map(String).join(' ')}`));
+const realError = console.error.bind(console);
+console.error = (...a) => { consoleErrors.push(`[console.error] ${a.map(String).join(' ')}`); realError(...a); };
 
 const dom = new JSDOM(read('web/index.html'), {
   runScripts: 'outside-only',
@@ -104,6 +109,7 @@ window.matchMedia = window.matchMedia || ((q) => ({ matches: false, media: q, ad
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const $ = (s) => doc.querySelector(s);
 const $$ = (s) => [...doc.querySelectorAll(s)];
+const $s_ = (s) => doc.querySelector(s);
 const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCase().includes(text.toLowerCase()));
 
 (async () => {
@@ -299,8 +305,12 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
     's-requests': STATS.total_requests.toLocaleString('en-US'),
     's-models': String(STATS.models_on_disk),
   };
+  check('HOME: szkielet zniknal po danych', $s_('#stat-skeleton')?.hidden === true,
+    `hidden=${$s_('#stat-skeleton')?.hidden}`);
   for (const [id, want] of Object.entries(homeStats)) {
-    check(`HOME: #${id} wypelniony`, $('#' + id).textContent === want, `"${$('#' + id).textContent}" oczekiwano "${want}"`);
+    const node = $(`#${id}`);
+    check(`HOME: #${id} istnieje i wypelniony`, !!node && node.textContent === want,
+      node ? `"${node.textContent}" oczekiwano "${want}"` : 'BRAK ELEMENTU');
   }
   check('HOME: nazwa ostatniego modelu', $('#s-last-model').textContent === 'gemma.gguf', $('#s-last-model').textContent);
   check('HOME: uptime wypelnione', /\d/.test($('#s-uptime').textContent), $('#s-uptime').textContent);

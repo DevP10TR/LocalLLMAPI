@@ -164,7 +164,8 @@ for (const [name, re] of [
   ['gradientowy tekst', /background-clip:\s*text/],
   ['glassmorphism', /backdrop-filter/],
   ['animowane liczniki', /countTo|requestAnimationFrame/],
-  ['shimmer/skeleton', /@keyframes\s+shimmer|\.skel/],
+  ['shimmer dekoracja (nie skeleton)', /@keyframes\s+shimmer/],
+  ['nieskonczona animacja tla', /@keyframes\s+drift|\.aurora/],
   ['pulsujaca kropka', /@keyframes\s+ping/],
   ['efekt ripple na przyciskach', /\.btn::after/],
   ['plywajace ikony', /@keyframes\s+floaty/],
@@ -175,6 +176,13 @@ for (const [name, re] of [
 }
 check('wszystkie ikony nadal istnieja w vendor CSS', missing.length === 0, missing.join(', '));
 check('nie ma wielu kolorow akcentu w .brand-mark', !/linear-gradient/.test(css.split('.brand-mark')[1]?.split('}')[0] || ''));
+check('logo nie jest fioletowe', !/#6366f1|indigo|violet/i.test(
+  read('web/branding/icon.svg') + (css.match(/--mark-bg:[^;]+/g) || []).join(' ')));
+check('brak twardego `height` na td tabeli (zrodlo nakladania sie wierszy)',
+  !/\.tbl tbody td\s*\{[^}]*[,{;]\s*height\s*:/.test(css));
+check('akcje w wierszu nie sa ukryte do hovera (ekran dotykowy)',
+  /\.row-acts \.icon-btn\s*\{[^}]*opacity:\s*0/.test(css) === false ||
+  /@media\s*\(hover:\s*none\)[\s\S]*?\.row-acts \.icon-btn\s*\{[^}]*opacity:\s*1/.test(css));
 check('min-height:0 na kontenerze scroll', /\.scroll\s*\{[^}]*min-height:\s*0/.test(css));
 check('min-height:0 na .nav', /\.nav\s*\{[^}]*min-height:\s*0/.test(css));
 

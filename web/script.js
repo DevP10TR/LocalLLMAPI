@@ -104,8 +104,38 @@ async function copyText(text) {
   }
 }
 
-const copyAndToast = (text) =>
-  copyText(text).then((ok) => toast(ok ? t('js_copied') : t('js_copy_fail'), ok ? 'ok' : 'err'));
+const copyAndToast = async (text, btn) => {
+  const ok = await copyText(text);
+  toast(ok ? t('js_copied') : t('js_copy_fail'), ok ? 'ok' : 'err');
+  if (ok && btn) {
+    // Krotkie potwierdzenie w miejscu — czytelniejsze niz toast.
+    btn.classList.add('is-copied');
+    setTimeout(() => btn.classList.remove('is-copied'), 1100);
+  }
+  return ok;
+};
+
+/* ---------- animacje wartosci ---------- */
+const lastValues = new WeakMap();
+/** Podswietla kafelek tylko wtedy, gdy liczba faktycznie sie zmienila. */
+function setValue(node, text) {
+  if (!node || node.textContent === text) return;
+  node.textContent = text;
+  if (lastValues.get(node) === text) return;
+  lastValues.set(node, text);
+  const tile = node.closest('.stat');
+  if (!tile) return;
+  tile.classList.remove('is-updated');
+  void tile.offsetWidth;        // wymuszenie reflow, by animacja sie powtorzyla
+  tile.classList.add('is-updated');
+}
+
+/* Kaskadowe wejscie blokow na panelu (przy zmianie zakladki). */
+function stagger(panel) {
+  panel.classList.remove('stagger');
+  void panel.offsetWidth;
+  panel.classList.add('stagger');
+}
 
 /* ---------- toasty ---------- */
 const TOAST_ICON = { ok: 'circle-check', err: 'alert-circle', info: 'info-circle' };
@@ -150,6 +180,7 @@ function showTab(name, push = true) {
 
   document.body.classList.remove('nav-open');
   $s('scroll').scrollTop = 0;
+  stagger(panel);
   if (push && location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
 
   if (name === 'settings') { loadSlots(); loadLoadedModels(); }
@@ -288,9 +319,29 @@ function renderRecent(rows) {
   )));
 }
 
+/* Skeleton na pierwszym zaladowaniu danych — nie miga przy pollingu.
+   Nakladamy go warstwa NAD siatka: karty w HTML maja id, a loadStats()
+   tylko aktualizuje ich textContent, wiec nie mozemy ich podmienic. */
+let statsLoaded = false;
+function showSkeleton() {
+  if (statsLoaded) return;
+  const layer = $s('stat-skeleton');
+  if (layer.childElementCount) return;
+  layer.replaceChildren(...Array.from({ length: 6 }, () => el('article', { class: 'stat' },
+    el('div', { class: 'skel skel-line', style: 'width:45%' }),
+    el('div', { class: 'skel skel-val' }),
+    el('div', { class: 'skel skel-line', style: 'width:65%;margin-bottom:0' }))));
+  layer.hidden = false;
+}
+
+function hideSkeleton() {
+  $s('stat-skeleton').hidden = true;
+}
+
 async function loadStats() {
   try {
     const d = await api('/api/stats');
+    if (!d) return;                    // odpowiedz pusta — nie ruszamy UI
     const last = d.last;
 
     const lm = $s('s-last-model');
@@ -300,23 +351,25 @@ async function loadStats() {
       ? `${ago(last.timestamp)} · ${dec(last.tokens_per_second, 1)} t/s`
       : t('home_never_used');
 
-    $s('s-tokens').textContent = num(d.total_tokens);
+    setValue($s('s-tokens'), num(d.total_tokens));
     $s('s-tokens-sub').textContent = d.requests_1h
       ? `+${num(d.tokens_1h)} ${t('last_hour')}` : t('stat_no_recent');
 
-    $s('s-requests').textContent = num(d.total_requests);
+    setValue($s('s-requests'), num(d.total_requests));
     $s('s-requests-sub').textContent = d.requests_1h
       ? `+${num(d.requests_1h)} ${t('last_hour')}` : t('stat_no_recent');
 
-    $s('s-tps-n').textContent = dec(d.avg_tps, 1);
+    setValue($s('s-tps-n'), dec(d.avg_tps, 1));
     $s('s-tps-sub').textContent = `${t('stat_best')} ${dec(d.best_tps, 1)} t/s`;
 
-    $s('s-models').textContent = num(d.models_on_disk);
+    setValue($s('s-models'), num(d.models_on_disk));
     $s('s-models-sub').textContent = `${d.loaded_models.length} ${t('stat_in_memory')}`;
 
     $s('s-uptime').textContent = uptime(d.uptime);
     $s('s-uptime-sub').textContent = `port ${d.port} · ${d.local_ip}`;
 
+    statsLoaded = true;
+    hideSkeleton();
     renderSlots(d.slots_total, d.loaded_models);
     renderRecent(d.recent || []);
 
@@ -350,7 +403,7 @@ function renderModels(models, loadedNames) {
         el('span', { text: m.id, title: m.id }),
         el('button', {
           class: 'icon-btn', 'aria-label': t('js_copy_id'),
-          onclick: () => copyAndToast(m.id),
+          onclick: (e) => copyAndToast(m.id, e.currentTarget),
         }, icon('copy'))),
     );
   }));
@@ -383,7 +436,7 @@ function renderKeys(keys) {
         el('strong', { text: k.name }),
         el('button', {
           class: 'key-val', 'aria-label': t('js_copy_key'), title: t('js_copy_key'),
-          onclick: () => copyAndToast(k.api_key),
+          onclick: (e) => copyAndToast(k.api_key, e.currentTarget),
         }, el('span', { text: maskKey(k.api_key) })))),
     el('td', {}, engineBadge(k.engine)),
     el('td', { class: 'dim', title: fmtDT(k.last_used) }, k.last_used ? ago(k.last_used) : t('js_never')),
@@ -599,7 +652,7 @@ function renderLogs() {
         el('button', {
           class: 'icon-btn', style: 'width:22px;height:22px;font-size:13px',
           'aria-label': t('js_copy_id'),
-          onclick: () => copyAndToast(r.model),
+          onclick: (e) => copyAndToast(r.model, e.currentTarget),
         }, icon('copy')))),
     el('td', { class: 'num dim' }, dec(r.elapsed_seconds, 2)),
     el('td', { class: 'num dim' }, dec(r.ttft, 3)),
@@ -618,10 +671,10 @@ async function loadLogs() {
     const tps = logRows.map((r) => r.tokens_per_second || 0);
     const avg = tps.length ? tps.reduce((x, y) => x + y, 0) / tps.length : 0;
 
-    $s('lg-tokens').textContent = num(tokens);
-    $s('lg-requests').textContent = num(logRows.length);
-    $s('lg-avg').textContent = dec(avg, 1);
-    $s('lg-best').textContent = dec(tps.length ? Math.max(...tps) : 0, 1);
+    setValue($s('lg-tokens'), num(tokens));
+    setValue($s('lg-requests'), num(logRows.length));
+    setValue($s('lg-avg'), dec(avg, 1));
+    setValue($s('lg-best'), dec(tps.length ? Math.max(...tps) : 0, 1));
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const hourly = Array(24).fill(0);
@@ -955,6 +1008,7 @@ function start() {
 
   renderEndpoints();
   renderCode();
+  showSkeleton();
   refresh(true).then(schedule);
   setTimeout(schedule, 3000);
 }

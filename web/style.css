@@ -44,6 +44,9 @@
   --shadow:    0 1px 2px rgb(0 0 0 / .4);
   --overlay:   rgb(0 0 0 / .6);
   --code-bg:   #0d0d10;
+  /* Logo: monochromatyczne — bez fioletu. */
+  --mark-bg:   #ededf0;
+  --mark-fg:   #09090b;
 }
 
 [data-theme="light"] {
@@ -63,6 +66,8 @@
   --shadow:    0 1px 2px rgb(0 0 0 / .05);
   --overlay:   rgb(24 24 27 / .35);
   --code-bg:   #f8f8fa;
+  --mark-bg:   #18181b;
+  --mark-fg:   #fafafa;
 }
 
 /* ---------- 2. RESET ---------- */
@@ -118,8 +123,10 @@ h1, h2, h3 { font-weight: 600; }
   flex: none; width: 26px; height: 26px;
   display: grid; place-items: center;
   border-radius: var(--r-md);
-  background: var(--accent);
-  color: #fff; font-size: 15px;
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+  font-size: 15px;
+  transition: background var(--t), color var(--t);
 }
 .brand-text { display: flex; flex-direction: column; min-width: 0; }
 .brand-text strong { font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
@@ -137,11 +144,22 @@ h1, h2, h3 { font-weight: 600; }
   height: 30px; padding: 0 8px;
   border-radius: var(--r-md);
   color: var(--text-2); font-size: 13px; font-weight: 500;
-  transition: background var(--t), color var(--t);
+  transition: background var(--t), color var(--t), transform 140ms cubic-bezier(.16,1,.3,1);
 }
 .nav-item i { font-size: 16px; flex: none; }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
+.nav-item:active { transform: scale(.98); }
 .nav-item.is-active { background: var(--surface-3); color: var(--text); }
+/* Pionowa kreska aktywnej pozycji — wsuwa sie zamiast pojawiac sie nagle. */
+.nav-item::before {
+  content: ''; position: absolute; left: 0; top: 50%;
+  width: 2px; height: 0; border-radius: var(--r-full);
+  background: var(--text-2);
+  transform: translateY(-50%);
+  transition: height 180ms cubic-bezier(.16,1,.3,1);
+}
+.nav-item { position: relative; }
+.nav-item.is-active::before { height: 15px; }
 
 .nav-badge {
   margin-left: auto; font-style: normal; font-size: 10.5px; font-weight: 600;
@@ -198,8 +216,40 @@ body.nav-open .scrim { opacity: 1; pointer-events: auto; }
 .scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 
 .panel { display: none; padding: 24px 20px 56px; max-width: var(--content-w); }
-.panel.is-active { display: block; animation: fade var(--t) both; }
+.panel.is-active { display: block; animation: panelIn 180ms cubic-bezier(.16,1,.3,1) both; }
+/* Wejscie panelu: krotki przesuw w dol + przygaszenie. Kropki w kasie
+   od strony slajdu zamiast wspascajacej skali. */
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(5px); }
+}
 @keyframes fade { from { opacity: 0; } }
+
+/* Kaskadowe wejscie kolejnych blokow na panelu. */
+.stagger > * { animation: riseIn 260ms cubic-bezier(.16,1,.3,1) both; }
+.stagger > *:nth-child(1) { animation-delay: 20ms; }
+.stagger > *:nth-child(2) { animation-delay: 55ms; }
+.stagger > *:nth-child(3) { animation-delay: 90ms; }
+.stagger > *:nth-child(4) { animation-delay: 125ms; }
+.stagger > *:nth-child(5) { animation-delay: 160ms; }
+.stagger > *:nth-child(6) { animation-delay: 195ms; }
+.stagger > *:nth-child(7) { animation-delay: 230ms; }
+.stagger > *:nth-child(n+8) { animation-delay: 260ms; }
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(7px); }
+}
+
+/* Kafelek statystyki: krotki puls gdy wartosc sie zmieni. */
+@keyframes valueFlash {
+  0%   { color: var(--accent-text); }
+  100% { color: inherit; }
+}
+.is-updated { animation: valueFlash 700ms ease-out; }
+
+/* Pasek postępu slotu — szerszy smooth, bez odbicia. */
+.slot-fill span { transition: width 500ms cubic-bezier(.16,1,.3,1); }
+
+/* Klawisz kopiowania: krotkie zielone potwierdzenie zamiast toasta. */
+.key-val svg, .mc-id svg, .cell-flex svg { transition: opacity 120ms; }
 
 /* ---------- 6. PRZYCISKI ---------- */
 .btn {
@@ -276,24 +326,38 @@ body.nav-open .scrim { opacity: 1; pointer-events: auto; }
 
 /* ---------- 8. KAFLE STATYSTYK ---------- */
 .stat-grid {
+  position: relative;
   display: grid; gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
   margin-bottom: 20px;
 }
 
+/* Skeleton nakladany NA siatke, nie zamiast niej — statyczne karty w HTML maja
+   id, ktorych loadStats() tylko aktualizuje (textContent), wiec podmienienie
+   dzieci zniszczyloby je bezpowrotnie. */
+.skel-layer {
+  position: absolute; inset: 0; z-index: 2;
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  background: var(--bg);
+  border-radius: var(--r-lg);
+}
+.skel-layer[hidden] { display: none; }
+
 .stat {
   padding: 13px 15px;
   border: 1px solid var(--border); border-radius: var(--r-lg);
   background: var(--surface);
-  transition: border-color var(--t);
+  transition: border-color var(--t), background var(--t);
 }
-.stat:hover { border-color: var(--border-2); }
+.stat:hover { border-color: var(--border-2); background: var(--surface-2); }
 .stat-label {
   display: flex; align-items: center; gap: 6px;
   font-size: 11.5px; font-weight: 500; color: var(--text-3);
   margin-bottom: 7px;
 }
-.stat-label i { font-size: 14px; }
+.stat-label i { font-size: 14px; transition: transform 200ms cubic-bezier(.16,1,.3,1); }
+.stat:hover .stat-label i { transform: scale(1.12); }
 .stat-val {
   font-size: 22px; font-weight: 600; letter-spacing: -.03em; line-height: 1.15;
   font-variant-numeric: tabular-nums;
@@ -309,14 +373,17 @@ body.nav-open .scrim { opacity: 1; pointer-events: auto; }
   margin-bottom: 14px;
   border: 1px solid var(--border); border-radius: var(--r-lg);
   background: var(--surface);
+  transition: border-color var(--t);
 }
+.card:hover { border-color: var(--border-2); }
 .card-head {
   display: flex; align-items: center; gap: 10px;
   height: 44px; padding: 0 15px;
   border-bottom: 1px solid var(--border);
 }
 .card-head h3 { display: flex; align-items: center; gap: 7px; font-size: 13px; flex: 1; }
-.card-head h3 i { font-size: 15px; color: var(--text-3); }
+.card-head h3 i { font-size: 15px; color: var(--text-3); transition: color var(--t); }
+.card:hover .card-head h3 i { color: var(--text-2); }
 .card-desc { padding: 12px 15px 0; font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
 .card-body { padding: 15px; }
 .card > :last-child { margin-bottom: 0; }
@@ -463,6 +530,10 @@ body.nav-open .scrim { opacity: 1; pointer-events: auto; }
 /* ---------- 13. TABELE ---------- */
 .table-wrap { overflow-x: auto; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 520px; }
+
+/* Wysokosc wiersza ustawiamy paddingiem, nie `height` — przy `height` komorka
+   jest za niska na dwie linie tresci (nazwa + maska klucza) i linie sie
+   nakladaja, a `overflow` w tabeli nic nie porzadkuje. */
 .tbl thead th {
   height: 30px; padding: 0 15px;
   background: var(--surface-2);
@@ -471,16 +542,20 @@ body.nav-open .scrim { opacity: 1; pointer-events: auto; }
   color: var(--text-3); text-align: left; white-space: nowrap;
 }
 .tbl thead th.num { text-align: right; }
-.tbl tbody td { height: 38px; padding: 0 15px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.tbl tbody td {
+  padding: 9px 15px; border-bottom: 1px solid var(--border);
+  color: var(--text-2); vertical-align: middle; line-height: 1.4;
+}
 .tbl tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tbl tbody tr:last-child td { border-bottom: 0; }
+.tbl tbody tr { transition: background var(--t); }
 .tbl tbody tr:hover { background: var(--surface-2); }
 .tbl td strong { color: var(--text); font-weight: 500; }
 .tbl td .mono { font-family: var(--mono); font-size: 11.5px; }
 .tbl td .dim { color: var(--text-3); font-size: 11.5px; }
 .tbl td .good { color: var(--ok); font-weight: 500; }
 .tbl td .ellip { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
-.tbl .cell-flex { display: flex; align-items: center; gap: 6px; }
+.tbl .cell-flex { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
 .engine-badge {
   display: inline-block; height: 18px; padding: 0 6px; border-radius: 4px;
@@ -490,19 +565,37 @@ body.nav-open .scrim { opacity: 1; pointer-events: auto; }
 .engine-badge.cuda   { color: var(--ok); }
 .engine-badge.vulkan { color: var(--accent-text); }
 
-.key-name { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+/* Nazwa klucza nad zamaskowana wartoscia — dwie linie, kazda z wlasnym
+   rytmem, `gap` zamiast marginesow, zeby sie nie nakladaly. */
+.key-name { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.key-name > strong {
+  display: block; max-width: 100%;
+  font-size: 12.5px; font-weight: 600; color: var(--text); line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .key-val {
   display: inline-flex; align-items: center; gap: 4px;
-  font-family: var(--mono); font-size: 10.5px; color: var(--text-3);
-  cursor: pointer; padding: 1px 5px; border-radius: 4px;
-  background: var(--surface-2);
+  max-width: 100%; height: 18px; padding: 0 6px;
+  border-radius: 4px; background: var(--surface-2);
+  font-family: var(--mono); font-size: 10.5px; line-height: 18px; color: var(--text-3);
+  cursor: pointer;
   transition: color var(--t), background var(--t);
 }
-.key-val:hover { color: var(--accent-text); background: var(--accent-weak); }
-.key-val i { font-size: 12px; }
+.key-val > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.key-val:hover { color: var(--text); background: var(--surface-3); }
+.key-val.is-copied { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
 
 .row-acts { display: flex; gap: 2px; justify-content: flex-end; }
-.row-acts .icon-btn { width: 26px; height: 26px; font-size: 15px; }
+/* Przyciski akcji ciche, ale NIE ukryte — na dotyku nie ma hovera, wiec
+   opacity:0 oznaczaloby, ze nigdy nie da sie edytowac klucza. */
+.row-acts .icon-btn {
+  width: 26px; height: 26px; font-size: 15px;
+  opacity: .4;
+  transition: opacity var(--t), background var(--t), color var(--t);
+}
+.tbl tbody tr:hover .row-acts .icon-btn,
+.row-acts .icon-btn:hover,
+.row-acts .icon-btn:focus-visible { opacity: 1; }
 .row-acts .icon-btn.danger:hover { color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
 
 .keys-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
@@ -562,10 +655,22 @@ body.nav-open .scrim { opacity: 1; pointer-events: auto; }
 
 .chart-box { position: relative; height: 260px; padding: 15px; }
 
-/* ---------- 15. EMPTY ---------- */
+/* ---------- 15. EMPTY / SKELETON ---------- */
 .empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 44px 20px; text-align: center; }
 .empty > i { font-size: 24px; color: var(--text-3); }
 .empty p { color: var(--text-2); font-size: 12.5px; max-width: 38ch; }
+
+/* Skeleton tylko na pierwszym zaladowaniu danych — nie migocze przy pollingu. */
+.skel { border-radius: 4px; background: var(--surface-2); position: relative; overflow: hidden; }
+.skel::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, var(--surface-3), transparent);
+  transform: translateX(-100%);
+  animation: sweep 1.1s ease-in-out infinite;
+}
+@keyframes sweep { to { transform: translateX(100%); } }
+.skel-line { height: 11px; margin: 13px 15px; }
+.skel-val { height: 20px; width: 60%; margin: 8px 15px 12px; }
 
 /* ---------- 16. MODALE ---------- */
 .modal {
@@ -611,6 +716,11 @@ body.nav-open .scrim { opacity: 1; pointer-events: auto; }
 .toast.err > i { color: var(--err); }
 
 /* ---------- 18. RESPONSYWNIE ---------- */
+/* Na dotyku nie ma hovera — akcje w wierszu musza byc w pelni widoczne. */
+@media (hover: none) {
+  .row-acts .icon-btn { opacity: 1; }
+  .btn:hover { filter: none; }
+}
 @media (max-width: 1000px) {
   .app-head { flex-wrap: wrap; }
   .app-tags { margin-left: 0; width: 100%; justify-content: flex-start; }
