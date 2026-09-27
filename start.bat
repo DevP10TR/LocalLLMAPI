@@ -1,29 +1,32 @@
 @echo off
+chcp 65001 > nul
 setlocal
-echo ===================================
-echo Local LLM API Manager (OpenRouter Clone)
-echo ===================================
-echo 1. Uruchom serwer API w tle i wlacz interfejs Web
-echo 2. Uruchom tylko serwer API (bez interfejsu przegladarki)
-echo ===================================
-set /p wybor="Wybierz opcje (1-2): "
+title LocalLLMAPI
+cd /d "%~dp0"
 
-if "%wybor%"=="1" goto web
+echo ==============================================
+echo   LocalLLMAPI  -  lokalny router OpenAI
+echo ==============================================
+echo.
+echo   1. Uruchom serwer i otworz panel w przegladarce
+echo   2. Uruchom sam serwer (bez przegladarki)
+echo.
+set /p wybor="Wybierz (1-2): "
+
 if "%wybor%"=="2" goto server
 
-:web
-echo Uruchamianie serwera w tle...
-start "LLM API Server" /B python -m uvicorn backend.router_server:app --host 0.0.0.0 --port 8000 > server.log 2>&1
-echo Otwieranie interfejsu Web w przegladarce...
-start http://localhost:8000
-echo Naciśnij dowolny klawisz aby zakończyć proces serwera...
-pause >nul
-goto end
+echo.
+echo Uruchamianie serwera na porcie 1000...
+start "LocalLLMAPI Server" /B python -m uvicorn backend.router_server:app --host 0.0.0.0 --port 1000
+timeout /t 2 /nobreak > nul
+start http://localhost:1000
+echo Panel:      http://localhost:1000
+echo API:        http://localhost:1000/v1
+echo.
+echo Aby zatrzymac serwer zamknij okno "LocalLLMAPI Server".
+pause
+exit /b
 
 :server
-echo Uruchamianie serwera na porcie 8000...
-python -m uvicorn backend.router_server:app --host 0.0.0.0 --port 8000
-goto end
-
-:end
-echo Koniec.
+echo Uruchamianie serwera na porcie 1000 (Ctrl+C konczy)...
+python -m uvicorn backend.router_server:app --host 0.0.0.0 --port 1000

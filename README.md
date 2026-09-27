@@ -1,25 +1,80 @@
 # LocalLLMAPI
 
-A fast, lightweight, local API server that mimics OpenAI's endpoints (e.g., `/v1/chat/completions`, `/v1/models`), powered by `llama-cpp-python` with hardware acceleration support (Vulkan/CUDA). It comes with a built-in model manager, a system for generating custom API keys, detailed usage logging, and a modern "Playground" chat interface that runs directly in your browser!
+A fast, lightweight, **local** API server that mimics OpenAI's endpoints (`/v1/chat/completions`, `/v1/models`), powered by `llama-cpp-python` with hardware acceleration (Vulkan / CUDA / CPU). It ships with a model manager, custom API keys, detailed usage logging and a web dashboard.
+
+Runs on **port 1000**.
 
 ## Features
 
-- **OpenAI API Compatibility**: Endpoints are fully compatible with OpenAI client libraries and tools.
-- **Web Dashboard**: A beautiful, responsive user interface with a sleek Dark Mode. View usage statistics, manage models, and test your API keys.
-- **API Key Management**: Create multiple keys for different applications, track usage stats, log every request, and monitor token consumption.
-- **VRAM Optimization**: Loaded models are automatically unloaded from memory after 2 minutes of inactivity to free up your GPU resources.
-- **Built-in Playground**: An interactive web chat to test models in real time, featuring smooth server-sent text streaming and generation statistics (tokens/s).
-- **GGUF Model Management**: The application automatically detects `.gguf` models placed in the local directory and exposes them via the API.
+- **OpenAI API compatibility** — works out of the box with the official Python/JS clients, LangChain, Open WebUI and anything else that speaks the OpenAI protocol.
+- **Home dashboard** — at a glance: last used model, total tokens, request count, average and best tokens/s, models on disk, uptime, slot occupancy and the last requests.
+- **3 model slots** — each slot can be bound to a different device (`Vulkan` / `CUDA` / `CPU`). Models are routed into the slot matching the API key's engine.
+- **No duplicate loads** — concurrent requests for the same model share a single in-memory instance instead of loading one per request.
+- **VRAM auto-unload** — models idle for more than 2 minutes are freed automatically.
+- **API key management** — create, edit and delete keys, switch their engine, and track token usage per key.
+- **Detailed logging** — every request is recorded with TTFT, duration, token count and tokens/s (avg / min / max), plus a 24-hour chart.
+- **Light & dark theme** — follows your OS preference, with a manual toggle.
+- **Polish / English** — switchable from the Settings tab.
+- **Works offline** — Chart.js, the Tabler icon font and all assets are served locally. No CDN, no internet required.
 
 ## Requirements
 
 - **Python 3.10+**
-- (Optional) A compatible GPU for hardware acceleration.
+- A `.gguf` model in `models/` (a small test model is downloaded automatically if the folder is empty)
+- Optional: a GPU with Vulkan or CUDA for acceleration
 
-## Getting Started
+## Getting started
 
-1. Run `install_vulkan.bat` (or manually install the requirements) to download all dependencies optimized for GPU acceleration.
-2. Obtain your LLM models (e.g., Llama 3, Qwen) in `.gguf` format and place them directly in the `models/` folder.
-3. Run `start.bat`. The server and the web dashboard will be available at `http://127.0.0.1:8000`.
+1. Run `install_vulkan.bat` (or `pip install -r requirements.txt`, then install `llama-cpp-python` with the flags for your backend).
+2. Put your models in `.gguf` format into `models/`.
+3. Run `start.bat` — the dashboard opens at <http://localhost:1000>.
+
+## Connecting an app
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://127.0.0.1:1000/v1",
+    api_key="PASTE_YOUR_API_KEY_HERE",
+)
+
+stream = client.chat.completions.create(
+    model="MODEL_NAME_FROM_MODELS_TAB",
+    messages=[{"role": "user", "content": "Hello!"}],
+    stream=True,
+)
+
+for chunk in stream:
+    print(chunk.choices[0].delta.content or "", end="", flush=True)
+```
+
+The dashboard's **Connection** tab shows ready-made snippets for Python, cURL and JavaScript with your LAN address already filled in.
+
+## Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/v1/chat/completions` | Chat completion (streaming and non-streaming) |
+| `GET` | `/v1/models` | List of available models |
+| `GET` | `/api/status` | Loaded models, slots, uptime, local IP |
+| `GET` | `/api/stats` | Aggregates for the Home dashboard |
+| `GET` | `/api/keys` · `POST` · `PUT` · `DELETE` | API key management |
+| `GET` | `/api/logs/{id}` | Request history for one key |
+| `GET`/`PUT` | `/api/settings/slots` | Slot → device mapping |
+| `POST` | `/api/unload` | Free models from memory |
+| `GET` | `/docs` | Interactive OpenAPI docs |
+
+## Development
+
+```bat
+python tools\test_backend.py      :: 33 testy: blokowanie pętli, duplikaty modeli, refcount, sloty, CORS, endpointy
+node tools\test_frontend.js       :: 36 testów: składnia, i18n, ikony, XSS, port, zależności
+python tools\check_frontend.py    :: spójność HTML/JS: ID, klucze i18n, ikony
+```
+
+> **Note:** the panel endpoints under `/api/*` are not authenticated — anyone who can
+> reach port 1000 on your network can create and delete keys. Bind to `127.0.0.1`
+> if that matters to you.
 
 *This project is designed for personal use and serves as a lightweight local LLM sandbox.*

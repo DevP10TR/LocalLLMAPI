@@ -1,211 +1,374 @@
-const translations = {
-    en: {
-        nav_models: "<i class=\"ph ph-cpu\"></i> Models",
-        nav_playground: "<i class=\"ph ph-chat-teardrop-text\"></i> Playground",
-        nav_keys: "<i class=\"ph ph-key\"></i> API Keys",
-        nav_logs: "<i class=\"ph ph-chart-bar\"></i> API Logs",
-        nav_connect: "<i class=\"ph ph-plug\"></i> Connection",
-        nav_settings: "<i class=\"ph ph-gear\"></i> Settings",
-        status_connecting: "Connecting...",
-        models_title: "Available Models",
-        models_desc: "All models loaded from the <code>models/</code> folder.",
-        models_active_label: "Currently loaded in memory:",
-        models_none: "None",
-        pg_title: "Playground",
-        pg_desc: "Test any loaded model live in the browser.",
-        pg_model_label: "Model:",
-        pg_select_model: "Select model...",
-        pg_welcome: "Select a model from the list above and write a message to start! Remember that you need to create your API Key in the 'API Keys' tab if you haven't already.",
-        pg_placeholder: "Write to the model... (Shift+Enter to send)",
-        keys_title: "API Key Management",
-        keys_desc: "Create your own keys to track usage for different apps or projects.",
-        keys_create_title: "Create new key",
-        keys_name_placeholder: "Key name (e.g. My Project)",
-        keys_val_placeholder: "Key value (e.g. sk-my-api-123)",
-        keys_create_btn: "<i class=\"ph ph-plus-circle\"></i> Create",
-        th_name: "Name",
-        th_guardrails: "Guardrails",
-        th_expires: "Expires",
-        th_last_used: "Last Used",
-        th_usage: "Usage",
-        logs_title: "Logs & Statistics",
-        logs_desc: "Select a key to check its history and usage chart.",
-        logs_back: "← Back to key selection",
-        logs_stats_title: "Key statistics",
-        logs_history_title: "Query history for the selected key",
-        th_time: "Time",
-        th_model_id: "Model API ID",
-        th_time_s: "Time (s)",
-        th_tokens: "Tokens",
-        th_tps: "t/s (Avg / Min / Max)",
-        logs_no_keys: "No keys available. Generate them in the 'API Keys' tab.",
-        conn_title: "How to connect?",
-        conn_desc: "Use the code below to connect any app (e.g. Python script) to this local router.",
-        conn_copy: "Copy",
-        conn_tip: "💡 <strong>Tip:</strong> Remember to provide the exact model name from the 'Models' tab and the correct <code>api_key</code> from the 'API Keys' tab.",
-        modal_edit_title: "Edit API key",
-        modal_edit_desc: "Change name and value for this key.",
-        modal_key_name: "Key name",
-        modal_key_val: "API Key",
-        modal_cancel: "Cancel",
-        modal_save: "Save",
-        settings_title: "Settings",
-        settings_desc: "Configure model slots and application preferences.",
-        settings_lang: "Language",
-        settings_slots_title: "Model Slots Configuration",
-        settings_slots_desc: "Each slot can be assigned a different device. Models will be loaded into matching slots based on the API key's engine setting.",
-        settings_slot_label: "Slot",
-        settings_device_label: "Device",
-        settings_save_btn: "Save",
-        settings_saved: "Settings updated!",
-        settings_loaded_title: "Currently Loaded Models",
-        settings_no_models: "No models loaded.",
-        settings_loaded_in: "Loaded in Slot",
-        settings_refcount: "Active requests",
-        settings_n_ctx: "Context (n_ctx)",
-        js_loaded_vram: "<i class=\"ph ph-check-circle\"></i> Loaded in VRAM",
-        js_avail_disk: "<i class=\"ph ph-hard-drive\"></i> Available on disk",
-        js_copy_id: "Copy model ID",
-        js_no_models: "No models. Downloading from HF in the background...",
-        js_never: "Never",
-        js_no_queries: "No queries for this key",
-        js_err_no_model: "Select a model from the list above first!",
-        js_err_no_key: "No API key! Go to API Keys tab and create at least one key.",
-        js_err_conn: "Connection error: ",
-        js_error: "Error: ",
-        js_tokens: "tokens",
-        js_key_deleted: "Key deleted!",
-        js_changes_saved: "Changes saved!",
-        js_copied: "Copied to clipboard!",
-        js_online: "Online",
-        js_offline: "Offline"
-    },
-    pl: {
-        nav_models: "<i class=\"ph ph-cpu\"></i> Modele",
-        nav_playground: "<i class=\"ph ph-chat-teardrop-text\"></i> Playground",
-        nav_keys: "<i class=\"ph ph-key\"></i> Klucze API",
-        nav_logs: "<i class=\"ph ph-chart-bar\"></i> Logi API",
-        nav_connect: "<i class=\"ph ph-plug\"></i> Połączenie",
-        nav_settings: "<i class=\"ph ph-gear\"></i> Ustawienia",
-        status_connecting: "Łączenie...",
-        models_title: "Dostępne Modele",
-        models_desc: "Wszystkie modele wczytane z folderu <code>models/</code>.",
-        models_active_label: "Aktualnie załadowany do pamięci:",
-        models_none: "Brak",
-        pg_title: "Playground",
-        pg_desc: "Przetestuj dowolny załadowany model na żywo w przeglądarce.",
-        pg_model_label: "Model:",
-        pg_select_model: "Wybierz model...",
-        pg_welcome: "Wybierz model z listy u góry i napisz wiadomość, aby rozpocząć! Pamiętaj, że potrzebujesz stworzyć swój Klucz API w zakładce \"Klucze API\", jeśli jeszcze go nie masz.",
-        pg_placeholder: "Napisz do modelu... (Shift+Enter by wysłać)",
-        keys_title: "Zarządzanie Kluczami API",
-        keys_desc: "Twórz własne klucze by śledzić zużycie dla różnych aplikacji lub projektów.",
-        keys_create_title: "Utwórz nowy klucz",
-        keys_name_placeholder: "Nazwa klucza (np. Mój Projekt)",
-        keys_val_placeholder: "Wartość klucza (np. sk-moje-api-123)",
-        keys_create_btn: "<i class=\"ph ph-plus-circle\"></i> Utwórz",
-        th_name: "Name",
-        th_guardrails: "Guardrails",
-        th_expires: "Expires",
-        th_last_used: "Last Used",
-        th_usage: "Usage",
-        logs_title: "Logi i Statystyki",
-        logs_desc: "Wybierz klucz, aby sprawdzić jego historię i wykres użycia.",
-        logs_back: "← Wróć do wyboru klucza",
-        logs_stats_title: "Statystyki klucza",
-        logs_history_title: "Historia zapytań dla wybranego klucza",
-        th_time: "Czas",
-        th_model_id: "Model API ID",
-        th_time_s: "Czas (s)",
-        th_tokens: "Tokeny",
-        th_tps: "t/s (Średnia / Min / Max)",
-        logs_no_keys: "Brak dostępnych kluczy. Wygeneruj je w zakładce \"Klucze API\".",
-        conn_title: "Jak się połączyć?",
-        conn_desc: "Użyj poniższego kodu, aby połączyć dowolną aplikację (np. skrypt w Pythonie) z tym lokalnym routerem.",
-        conn_copy: "Kopiuj",
-        conn_tip: "💡 <strong>Wskazówka:</strong> Pamiętaj aby podać dokładną nazwę modelu z zakładki \"Modele\" i poprawny <code>api_key</code> z zakładki \"Klucze API\".",
-        modal_edit_title: "Edytuj klucz API",
-        modal_edit_desc: "Zmień nazwę i wartość dla tego klucza.",
-        modal_key_name: "Nazwa klucza",
-        modal_key_val: "Klucz API",
-        modal_cancel: "Anuluj",
-        modal_save: "Zapisz",
-        settings_title: "Ustawienia",
-        settings_desc: "Skonfiguruj sloty modeli i preferencje aplikacji.",
-        settings_lang: "Język",
-        settings_slots_title: "Konfiguracja Slotów Modeli",
-        settings_slots_desc: "Każdy slot może mieć przypisane inne urządzenie. Modele będą ładowane do pasujących slotów na podstawie ustawienia silnika klucza API.",
-        settings_slot_label: "Slot",
-        settings_device_label: "Urządzenie",
-        settings_save_btn: "Zapisz",
-        settings_saved: "Ustawienia zapisane!",
-        settings_loaded_title: "Aktualnie Załadowane Modele",
-        settings_no_models: "Brak załadowanych modeli.",
-        settings_loaded_in: "Załadowany w Slocie",
-        settings_refcount: "Aktywne requesty",
-        settings_n_ctx: "Kontekst (n_ctx)",
-        js_loaded_vram: "<i class=\"ph ph-check-circle\"></i> Załadowany do VRAM",
-        js_avail_disk: "<i class=\"ph ph-hard-drive\"></i> Dostępny na dysku",
-        js_copy_id: "Kopiuj ID modelu",
-        js_no_models: "Brak modeli. Trwa pobieranie z HF w tle...",
-        js_never: "Nigdy",
-        js_no_queries: "Brak zapytań dla tego klucza",
-        js_err_no_model: "Wybierz najpierw model z listy u góry!",
-        js_err_no_key: "Brak klucza API! Przejdź do zakładki Klucze API i utwórz przynajmniej jeden klucz.",
-        js_err_conn: "Błąd połączenia: ",
-        js_error: "Błąd: ",
-        js_tokens: "tokenów",
-        js_key_deleted: "Usunięto klucz!",
-        js_changes_saved: "Zapisano zmiany!",
-        js_copied: "Skopiowano do schowka!",
-        js_online: "Połączono",
-        js_offline: "Brak połączenia"
-    }
+/* ==========================================================================
+   LocalLLMAPI — tłumaczenia PL / EN
+   i18n.js ładuje się PRZED script.js i wystawia t() globalnie.
+   ========================================================================== */
+(() => {
+'use strict';
+
+const DICT = {
+  pl: {
+    /* --- sidebar / topbar --- */
+    brand_tagline: 'Lokalny router LLM',
+    nav_label_overview: 'Przegląd',
+    nav_label_manage: 'Zarządzanie',
+    nav_label_system: 'System',
+    nav_home: 'Home',
+    nav_models: 'Modele',
+    nav_keys: 'Klucze API',
+    nav_logs: 'Logi API',
+    nav_connect: 'Połączenie',
+    nav_settings: 'Ustawienia',
+    status_connecting: 'Łączenie…',
+    topbar_api: 'API',
+    sub_home: 'Podsumowanie pracy lokalnego serwera',
+    sub_models: 'Pliki GGUF wykryte w katalogu models/',
+    sub_keys: 'Klucze do śledzenia zużycia per aplikacja',
+    sub_logs: 'Historia requestów i wykres zużycia',
+    sub_connect: 'Jak połączyć aplikację do tego routera',
+    sub_settings: 'Sloty, motyw i język panelu',
+
+    /* --- home --- */
+    home_hero_text: 'Lokalny router zgodny z OpenAI. Modele ładowane na GPU z automatycznym zwalnianiem pamięci i pełnym logowaniem zużycia.',
+    conn_desc_short: 'Zgodne z OpenAI',
+    tag_vulkan: 'Vulkan / CUDA / CPU',
+    tag_unload: 'Auto-zwalnianie po 2 min',
+    stat_last_model: 'Ostatnio używany model',
+    stat_tokens: 'Zużyte tokeny',
+    stat_requests: 'Requesty',
+    stat_tps: 'Średnia prędkość',
+    stat_models: 'Modele na dysku',
+    stat_uptime: 'Czas działania',
+    stat_slots: 'slotów',
+    stat_best: 'Rekord',
+    stat_in_vram: 'w pamięci',
+    stat_no_recent: 'brak w ostatniej godzinie',
+    stat_avg_tps: 'Średnia',
+    stat_best_tps: 'Rekord',
+    home_loaded_title: 'Sloty i załadowane modele',
+    home_recent_title: 'Ostatnie requesty',
+    home_see_all: 'Zobacz wszystkie',
+    home_no_requests: 'Jeszcze nie było żadnego requestu. Wyślij zapytanie przez API, aby zobaczyć tu statystyki.',
+    home_never_used: 'API nie zostało jeszcze użyte',
+    home_none_loaded: 'Brak modeli w pamięci — załadują się przy pierwszym zapytaniu',
+    last_hour: 'w ostatniej godz.',
+    slot_busy: 'Aktywny',
+    slot_loaded: 'Wczytany',
+    slot_free: 'Wolny',
+    slot_waiting: 'Oczekuje na model',
+    slot_idle: 'Bezczynny',
+
+    /* --- table headers --- */
+    th_time: 'Czas',
+    th_model_id: 'Model',
+    th_key_name: 'Klucz',
+    th_tokens: 'Tokeny',
+    th_time_s: 'Czas (s)',
+    th_tps_short: 't/s',
+    th_tps: 't/s (śr / min / max)',
+    th_ttft: 'TTFT (s)',
+    th_name: 'Nazwa',
+    th_engine: 'Silnik',
+    th_last_used: 'Ostatnio użyty',
+    th_usage: 'Tokeny',
+    th_actions: 'Akcje',
+
+    /* --- models --- */
+    models_active_label: 'Wczytany w pamięci:',
+    models_none: 'Brak',
+
+    /* --- keys --- */
+    keys_create_title: 'Nowy klucz',
+    keys_name_label: 'Nazwa',
+    keys_name_placeholder: 'np. Mój Projekt',
+    keys_val_label: 'Wartość klucza',
+    keys_val_placeholder: 'np. sk-moje-api-123',
+    keys_engine_label: 'Silnik',
+    keys_create_btn: 'Utwórz',
+    keys_list_title: 'Twoje klucze',
+    keys_empty: 'Brak kluczy. Utwórz pierwszy powyżej.',
+
+    /* --- logs --- */
+    logs_no_keys: 'Brak kluczy. Wygeneruj je w zakładce Klucze API.',
+    logs_go_keys: 'Przejdź do kluczy',
+    logs_back: 'Wróć do wyboru klucza',
+    logs_chart_title: 'Tokeny w ostatnich 24 godzinach',
+    logs_history_title: 'Historia zapytań',
+
+    /* --- connect --- */
+    conn_title: 'Jak się połączyć?',
+    conn_copy: 'Kopiuj',
+    conn_tip: 'Podaj dokładną nazwę modelu z zakładki <b>Modele</b> i poprawny klucz z zakładki <b>Klucze API</b>.',
+    ep_local: 'Na tym komputerze',
+    ep_lan: 'Z innego urządzenia (LAN)',
+    ep_chat: 'Czat',
+    ep_models: 'Lista modeli',
+
+    /* --- settings --- */
+    settings_slots_title: 'Sloty modeli',
+    settings_slots_desc: 'Każdy slot ma własne urządzenie. Model trafia do slotu pasującego do silnika klucza API.',
+    settings_lang: 'Język',
+    settings_loaded_title: 'Załadowane modele',
+    settings_unload_all: 'Zwolnij wszystkie',
+    settings_unload: 'Zwolnij z pamięci',
+    settings_unloaded: 'Model zwolniony',
+    settings_slot_label: 'Slot',
+    settings_device_label: 'Urządzenie',
+    settings_save_btn: 'Zapisz',
+    settings_saved: 'Ustawienia zapisane',
+    settings_no_models: 'Brak modeli w pamięci.',
+    settings_loaded_in: 'W slocie',
+    settings_n_ctx: 'Kontekst',
+    settings_refcount: 'Aktywne',
+
+    /* --- modals --- */
+    modal_edit_title: 'Edytuj klucz API',
+    modal_key_name: 'Nazwa klucza',
+    modal_key_val: 'Wartość klucza',
+    modal_engine: 'Silnik',
+    modal_cancel: 'Anuluj',
+    modal_save: 'Zapisz',
+    confirm_title: 'Potwierdź',
+    confirm_yes: 'Usuń',
+    confirm_delete_key: 'Usunąć klucz „{name}"? Wszystkie powiązane logi też zostaną skasowane.',
+    confirm_unload_all: 'Zwolnić wszystkie nieużywane modele z pamięci GPU?',
+
+    /* --- komunikaty --- */
+    time_never: 'nigdy',
+    time_now: 'przed chwilą',
+    time_min: 'min',
+    time_h: 'godz.',
+    time_d: 'd',
+    js_never: 'nigdy',
+    js_copied: 'Skopiowano do schowka',
+    js_copy_fail: 'Nie udało się skopiować',
+    js_copy_key: 'Kliknij, aby skopiować klucz',
+    js_copy_id: 'Kopiuj nazwę modelu',
+    js_loaded_vram: 'Załadowany w pamięci',
+    js_avail_disk: 'Dostępny na dysku',
+    js_no_models: 'Brak plików .gguf w katalogu models/. Trwa pobieranie modelu testowego w tle…',
+    js_created: 'Klucz utworzony',
+    js_changes_saved: 'Zmiany zapisane',
+    js_key_deleted: 'Klucz usunięty',
+    js_err_fields: 'Uzupełnij nazwę i wartość klucza',
+    js_online: 'Połączono',
+    js_offline: 'Brak połączenia',
+    js_err_conn: 'Utracono połączenie z serwerem',
+    js_edit: 'Edytuj',
+    js_delete: 'Usuń',
+    js_no_queries: 'Brak zapytań dla tego klucza',
+    js_search: 'Szukaj modelu…',
+  },
+
+  en: {
+    brand_tagline: 'Local LLM router',
+    nav_label_overview: 'Overview',
+    nav_label_manage: 'Manage',
+    nav_label_system: 'System',
+    nav_home: 'Home',
+    nav_models: 'Models',
+    nav_keys: 'API Keys',
+    nav_logs: 'API Logs',
+    nav_connect: 'Connection',
+    nav_settings: 'Settings',
+    status_connecting: 'Connecting…',
+    topbar_api: 'API',
+    sub_home: 'Local server at a glance',
+    sub_models: 'GGUF files found in models/',
+    sub_keys: 'Keys to track usage per application',
+    sub_logs: 'Request history and usage chart',
+    sub_connect: 'Connect your app to this router',
+    sub_settings: 'Slots, theme and panel language',
+
+    home_hero_text: 'An OpenAI-compatible local router. Models load onto your GPU, unload themselves when idle, and every request is logged.',
+    conn_desc_short: 'OpenAI compatible',
+    tag_vulkan: 'Vulkan / CUDA / CPU',
+    tag_unload: 'Auto-unload after 2 min',
+    stat_last_model: 'Last used model',
+    stat_tokens: 'Tokens used',
+    stat_requests: 'Requests',
+    stat_tps: 'Average speed',
+    stat_models: 'Models on disk',
+    stat_uptime: 'Uptime',
+    stat_slots: 'slots',
+    stat_best: 'Best',
+    stat_in_vram: 'in memory',
+    stat_no_recent: 'none in the last hour',
+    stat_avg_tps: 'Average',
+    stat_best_tps: 'Best',
+    home_loaded_title: 'Slots and loaded models',
+    home_recent_title: 'Recent requests',
+    home_see_all: 'See all',
+    home_no_requests: 'No requests yet. Send one through the API and it will show up here.',
+    home_never_used: 'The API has not been used yet',
+    home_none_loaded: 'Nothing in memory — models load on first request',
+    last_hour: 'in the last hour',
+    slot_busy: 'Active',
+    slot_loaded: 'Loaded',
+    slot_free: 'Free',
+    slot_waiting: 'Awaiting a model',
+    slot_idle: 'Idle',
+
+    th_time: 'Time',
+    th_model_id: 'Model',
+    th_key_name: 'Key',
+    th_tokens: 'Tokens',
+    th_time_s: 'Time (s)',
+    th_tps_short: 't/s',
+    th_tps: 't/s (avg / min / max)',
+    th_ttft: 'TTFT (s)',
+    th_name: 'Name',
+    th_engine: 'Engine',
+    th_last_used: 'Last used',
+    th_usage: 'Tokens',
+    th_actions: 'Actions',
+
+    models_active_label: 'Loaded in memory:',
+    models_none: 'None',
+
+    keys_create_title: 'New key',
+    keys_name_label: 'Name',
+    keys_name_placeholder: 'e.g. My Project',
+    keys_val_placeholder: 'e.g. sk-my-api-123',
+    keys_val_label: 'Key value',
+    keys_engine_label: 'Engine',
+    keys_create_btn: 'Create',
+    keys_list_title: 'Your keys',
+    keys_empty: 'No keys yet. Create the first one above.',
+
+    logs_no_keys: 'No keys available. Create one in the API Keys tab.',
+    logs_go_keys: 'Go to keys',
+    logs_back: 'Back to key selection',
+    logs_chart_title: 'Tokens over the last 24 hours',
+    logs_history_title: 'Query history',
+
+    conn_title: 'How to connect?',
+    conn_copy: 'Copy',
+    conn_tip: 'Use the exact model name from the <b>Models</b> tab and a valid key from the <b>API Keys</b> tab.',
+    ep_local: 'On this machine',
+    ep_lan: 'From another device (LAN)',
+    ep_chat: 'Chat',
+    ep_models: 'Model list',
+
+    settings_slots_title: 'Model slots',
+    settings_slots_desc: 'Each slot has its own device. A model is placed in the slot matching the API key engine.',
+    settings_lang: 'Language',
+    settings_loaded_title: 'Loaded models',
+    settings_unload_all: 'Unload all',
+    settings_unload: 'Unload from memory',
+    settings_unloaded: 'Model unloaded',
+    settings_slot_label: 'Slot',
+    settings_device_label: 'Device',
+    settings_save_btn: 'Save',
+    settings_saved: 'Settings saved',
+    settings_no_models: 'No models in memory.',
+    settings_loaded_in: 'In slot',
+    settings_n_ctx: 'Context',
+    settings_refcount: 'Active',
+
+    modal_edit_title: 'Edit API key',
+    modal_key_name: 'Key name',
+    modal_key_val: 'Key value',
+    modal_engine: 'Engine',
+    modal_cancel: 'Cancel',
+    modal_save: 'Save',
+    confirm_title: 'Confirm',
+    confirm_yes: 'Delete',
+    confirm_delete_key: 'Delete key “{name}"? All of its logs will be removed too.',
+    confirm_unload_all: 'Unload all unused models from GPU memory?',
+
+    time_never: 'never',
+    time_now: 'just now',
+    time_min: 'min',
+    time_h: 'h',
+    time_d: 'd',
+    js_never: 'never',
+    js_copied: 'Copied to clipboard',
+    js_copy_fail: 'Copy failed',
+    js_copy_key: 'Click to copy the key',
+    js_copy_id: 'Copy model name',
+    js_loaded_vram: 'Loaded in memory',
+    js_avail_disk: 'Available on disk',
+    js_no_models: 'No .gguf files in models/. A test model is downloading in the background…',
+    js_created: 'Key created',
+    js_changes_saved: 'Changes saved',
+    js_key_deleted: 'Key deleted',
+    js_err_fields: 'Fill in both the name and the key value',
+    js_online: 'Online',
+    js_offline: 'Offline',
+    js_err_conn: 'Lost connection to the server',
+    js_edit: 'Edit',
+    js_delete: 'Delete',
+    js_no_queries: 'No requests for this key',
+    js_search: 'Search model…',
+  },
 };
 
-let currentLang = localStorage.getItem('app_language') || 'en';
+const KEY = 'llmapi.lang';
+let lang = localStorage.getItem(KEY)
+  || ((navigator.language || 'pl').toLowerCase().startsWith('pl') ? 'pl' : 'en');
 
-function t(key) {
-    return translations[currentLang][key] || key;
+/** Podmienia {placeholder} w tłumaczeniu. */
+function fill(str, vars) {
+  return Object.entries(vars || {}).reduce(
+    (acc, [k, v]) => acc.replaceAll(`{${k}}`, v), str,
+  );
+}
+
+function t(key, vars) {
+  const dict = DICT[lang] || DICT.en;
+  return dict[key] ?? DICT.en[key] ?? key;
 }
 
 function translateUI() {
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if (translations[currentLang][key]) {
-            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                if (el.placeholder) el.placeholder = translations[currentLang][key];
-                if (el.value && el.type === 'button') el.value = translations[currentLang][key];
-            } else {
-                el.innerHTML = translations[currentLang][key];
-            }
-        }
-    });
+  document.documentElement.lang = lang;
+  document.title = 'LocalLLMAPI';
+
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    const value = DICT[lang]?.[node.dataset.i18n];
+    if (value === undefined) return;
+    // Ikony wewnątrz elementu z data-i18n zostają nietknięte tylko tam,
+    // gdzie klucz dotyczy samego tekstu (nav ma własny <span>).
+    node.innerHTML = value;
+  });
+
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+    const value = DICT[lang]?.[node.dataset.i18nPlaceholder];
+    if (value !== undefined) node.placeholder = value;
+  });
+
+  document.querySelectorAll('[data-i18n-title]').forEach((node) => {
+    const value = DICT[lang]?.[node.dataset.i18nTitle];
+    if (value !== undefined) node.title = value;
+  });
+
+  document.querySelectorAll('.lang-btn').forEach((b) => {
+    b.classList.toggle('is-active', b.dataset.lang === lang);
+  });
 }
 
-function setLanguage(lang) {
-    currentLang = lang;
-    localStorage.setItem('app_language', lang);
-    translateUI();
-    // Refresh dynamic data
-    if (typeof fetchData === 'function') {
-        lastModelsDataStr = "";
-        lastKeysDataStr = "";
-        fetchData();
-        const pgSelect = document.getElementById("pg-model-select");
-        if(pgSelect && pgSelect.options.length > 0 && pgSelect.options[0].value === "") {
-            pgSelect.options[0].text = t('pg_select_model');
-        }
-    }
+function setLanguage(next) {
+  lang = DICT[next] ? next : 'en';
+  localStorage.setItem(KEY, lang);
+  translateUI();
+  // Odświeżamy dane, bo etykiety są generowane w JS.
+  const api = window.LLMAPI;
+  if (!api) return;
+  document.querySelectorAll('.nav-item').forEach((n) => {
+    n.classList.toggle('is-active', n.dataset.tab === document.querySelector('.panel.is-active')?.id);
+  });
+  api.showTab(document.querySelector('.panel.is-active')?.id || 'home', false);
+  api.renderCode();
+  api.loadStats();
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    translateUI();
-    const langSelect = document.getElementById("settings-lang-select");
-    if (langSelect) {
-        langSelect.value = currentLang;
-        langSelect.addEventListener("change", (e) => {
-            setLanguage(e.target.value);
-        });
-    }
-});
+window.t = t;
+window.setLanguage = setLanguage;
+window.translateUI = translateUI;
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', translateUI);
+} else {
+  translateUI();
+}
+
+})();

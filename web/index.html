@@ -1,209 +1,419 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LocalLLMAPI</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="style.css?v=5">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>LocalLLMAPI</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b7cf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 11l-3 3 3 3'/%3E%3Cpath d='M13 7h4'/%3E%3Cpath d='M13 17h4'/%3E%3Crect width='20' height='16' x='2' y='4' rx='2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="vendor/tabler-icons.min.css">
+<link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
-    <div class="sidebar">
-        <div class="logo">
-            <div class="logo-icon"><i class="ph ph-lightning" style="color: white; font-size: 16px; margin: 4px;"></i></div>
-            <span>LocalLLMAPI</span>
-        </div>
-        
-        <nav>
-            <a href="#" class="nav-item active" data-tab="models-tab"><i class="ph ph-cpu"></i> Models</a>
-            <a href="#" class="nav-item" data-tab="keys-tab"><i class="ph ph-key"></i> API Keys</a>
-            <a href="#" class="nav-item" data-tab="logs-tab"><i class="ph ph-chart-bar"></i> API Logs</a>
-            <a href="#" class="nav-item" data-tab="connect-tab"><i class="ph ph-plug"></i> Connection</a>
-            <a href="#" class="nav-item" data-tab="settings-tab"><i class="ph ph-gear"></i> Settings</a>
-        </nav>
 
-        <div class="status-widget">
-            <div class="status-indicator" id="status-indicator"></div>
-            <span id="status-text" data-i18n="status_connecting">Connecting...</span>
-        </div>
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><i class="ti ti-terminal-2"></i></div>
+      <div class="brand-text">
+        <strong>LocalLLMAPI</strong>
+        <small data-i18n="brand_tagline">Local inference router</small>
+      </div>
+      <button class="icon-btn sidebar-close" id="sidebar-close" aria-label="Zamknij menu">
+        <i class="ti ti-x"></i>
+      </button>
     </div>
 
-    <main class="content">
-        <!-- ZAKŁADKA MODELE -->
-        <section id="models-tab" class="tab-content active">
-            <div class="page-header">
-                <h1 data-i18n="models_title">Available Models</h1>
-                <p data-i18n="models_desc">All models loaded from the <code>models/</code> folder.</p>
-            </div>
-            <div class="active-model-box">
-                <span class="label" data-i18n="models_active_label">Currently loaded in memory:</span>
-                <span class="value" id="active-model-name" data-i18n="models_none">None</span>
-            </div>
-            <div class="models-grid" id="models-list">
-                <!-- Ładowane dynamicznie -->
-            </div>
-        </section>
+    <nav class="nav" id="nav">
+      <span class="nav-label" data-i18n="nav_label_overview">Przegląd</span>
+      <a href="#home" class="nav-item is-active" data-tab="home">
+        <i class="ti ti-home-2"></i> <span data-i18n="nav_home">Home</span>
+      </a>
+      <a href="#models" class="nav-item" data-tab="models">
+        <i class="ti ti-cpu-2"></i> <span data-i18n="nav_models">Modele</span>
+      </a>
 
+      <span class="nav-label" data-i18n="nav_label_manage">Zarządzanie</span>
+      <a href="#keys" class="nav-item" data-tab="keys">
+        <i class="ti ti-key"></i> <span data-i18n="nav_keys">Klucze API</span>
+        <em class="nav-badge" id="nav-keys-count">0</em>
+      </a>
+      <a href="#logs" class="nav-item" data-tab="logs">
+        <i class="ti ti-chart-bar"></i> <span data-i18n="nav_logs">Logi API</span>
+      </a>
 
-        <!-- ZAKŁADKA KLUCZE API -->
-        <section id="keys-tab" class="tab-content">
-            <div class="page-header">
-                <h1 data-i18n="keys_title">API Key Management</h1>
-                <p data-i18n="keys_desc">Create your own keys to track usage for different apps or projects.</p>
-            </div>
-            
-            <div class="create-key-form">
-                <h3 data-i18n="keys_create_title">Create new key</h3>
-                <div class="form-group" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                    <input type="text" id="new-key-name" data-i18n="keys_name_placeholder" placeholder="Key name (e.g. My Project)" style="flex: 1;" />
-                    <input type="text" id="new-key-value" data-i18n="keys_val_placeholder" placeholder="Key value (e.g. sk-my-api-123)" style="flex: 1;" />
-                    <select id="new-key-engine" class="modal-input" style="width: auto; padding: 0.6rem; margin-bottom: 0;">
-                        <option value="vulkan">Vulkan</option>
-                        <option value="cuda">CUDA</option>
-                        <option value="cpu">CPU</option>
-                    </select>
-                    <button onclick="createApiKey()" data-i18n="keys_create_btn"><i class="ph ph-plus-circle"></i> Create</button>
-                </div>
-                <div id="key-error" style="color: #ef4444; margin-top: 10px; font-size: 0.9em;"></div>
-            </div>
+      <span class="nav-label" data-i18n="nav_label_system">System</span>
+      <a href="#connect" class="nav-item" data-tab="connect">
+        <i class="ti ti-plug"></i> <span data-i18n="nav_connect">Połączenie</span>
+      </a>
+      <a href="#settings" class="nav-item" data-tab="settings">
+        <i class="ti ti-settings"></i> <span data-i18n="nav_settings">Ustawienia</span>
+      </a>
+    </nav>
 
-            <div class="table-responsive">
-                <table class="or-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 40px;"><div class="checkbox-custom"></div></th>
-                            <th data-i18n="th_name">Name</th>
-                            <th data-i18n="th_guardrails">Guardrails</th>
-                            <th data-i18n="th_expires">Expires</th>
-                            <th data-i18n="th_last_used">Last Used</th>
-                            <th data-i18n="th_usage">Usage</th>
-                            <th style="width: 60px;"></th>
-                        </tr>
-                    </thead>
-                    <tbody id="keys-list">
-                        <!-- Lista kluczy API ładowana z serwera -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
+    <div class="sidebar-foot">
+      <div class="conn" id="conn">
+        <span class="conn-dot" id="status-indicator"></span>
+        <div class="conn-text">
+          <strong id="status-text" data-i18n="status_connecting">Łączenie…</strong>
+          <small id="status-sub">—</small>
+        </div>
+      </div>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Zmień motyw">
+        <i class="ti ti-sun" id="theme-icon"></i>
+        <span id="theme-label">Light</span>
+      </button>
+    </div>
+  </aside>
 
-        <!-- ZAKŁADKA LOGI API -->
-        <section id="logs-tab" class="tab-content">
-            <div class="page-header">
-                <h1 data-i18n="logs_title">Logs & Statistics</h1>
-                <p data-i18n="logs_desc">Select a key to check its history and usage chart.</p>
-            </div>
-            
-            <div id="log-keys-grid" class="log-keys-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
-                <!-- Kafelki ładowane dynamicznie -->
-            </div>
+  <div class="scrim" id="scrim"></div>
 
-            <div id="key-details" style="display: none; margin-top: 1.5rem;">
-                <button onclick="backToLogsGrid()" style="background: transparent; border: 1px solid var(--border-color); color: #f8fafc; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;" data-i18n="logs_back">
-                    ← Back to key selection
-                </button>
-                <h2 id="key-details-title" style="margin-bottom: 1rem; color: #f8fafc;" data-i18n="logs_stats_title">Key statistics</h2>
-                <div class="chart-container">
-                    <canvas id="usageChart"></canvas>
-                </div>
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="sidebar-open" aria-label="Otwórz menu">
+        <i class="ti ti-menu-2"></i>
+      </button>
+      <div class="topbar-title">
+        <h1 id="page-title">Home</h1>
+        <p id="page-sub"></p>
+      </div>
+      <div class="topbar-actions">
+        <a class="btn btn-ghost" id="open-docs" href="/docs" target="_blank" rel="noopener">
+          <i class="ti ti-api"></i> <span data-i18n="topbar_api">API</span>
+        </a>
+        <button class="btn btn-ghost" id="refresh-now" data-tip="Odśwież">
+          <i class="ti ti-refresh"></i>
+        </button>
+      </div>
+    </header>
 
-                <h3 style="margin-bottom: 1rem; margin-top: 2rem;" data-i18n="logs_history_title">Query history for the selected key</h3>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th data-i18n="th_time">Time</th>
-                            <th data-i18n="th_model_id">Model API ID</th>
-                            <th data-i18n="th_time_s">Time (s)</th>
-                            <th data-i18n="th_ttft">TTFT (s)</th>
-                            <th data-i18n="th_tokens">Tokens</th>
-                            <th data-i18n="th_tps">t/s (Avg / Min / Max)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logs-tbody">
-                        <!-- Ładowane dynamicznie -->
-                    </tbody>
-                </table>
+    <div class="scroll" id="scroll">
+
+      <!-- ---------- HOME ---------- -->
+      <section class="panel is-active" id="home">
+        <div class="hero reveal">
+          <div class="hero-glow" aria-hidden="true"></div>
+          <div class="hero-mark"><i class="ti ti-terminal-2"></i></div>
+          <div class="hero-body">
+            <h2>LocalLLMAPI</h2>
+            <p data-i18n="home_hero_text">
+              Lokalny router zgodny z OpenAI. Modele ładowane na GPU z automatycznym
+              zwalnianiem pamięci i pełnym logowaniem zużycia.
+            </p>
+            <div class="hero-tags">
+              <span class="tag"><i class="ti ti-plug"></i><span data-i18n="conn_desc_short">OpenAI compatible</span></span>
+              <span class="tag"><i class="ti ti-cpu-2"></i><span data-i18n="tag_vulkan">Vulkan / CUDA / CPU</span></span>
+              <span class="tag"><i class="ti ti-clock-hour-4"></i><span data-i18n="tag_unload">Auto-unload 2 min</span></span>
             </div>
-            <div id="no-keys-msg" style="color: #888; text-align: center; margin-top: 2rem;" data-i18n="logs_no_keys">
-                No keys available. Generate them in the 'API Keys' tab.
+          </div>
+          <div class="hero-code" aria-hidden="true">
+            <div class="hc-line"><span class="hc-p">$</span> pip install openai</div>
+            <div class="hc-line"><span class="hc-p">$</span> <span class="hc-dim"># serwer działa na porcie</span> <b id="hero-port">1000</b></div>
+          </div>
+        </div>
+
+        <div class="stat-grid" id="stat-grid">
+          <article class="stat reveal" data-stat="last_model" data-tip="Ostatni model użyty w API">
+            <div class="stat-head"><span class="stat-ic ic-purple"><i class="ti ti-cpu-2"></i></span></div>
+            <div class="stat-val stat-text" id="s-last-model">—</div>
+            <div class="stat-key" data-i18n="stat_last_model">Ostatnio używany model</div>
+            <div class="stat-sub" id="s-last-model-sub">—</div>
+          </article>
+
+          <article class="stat reveal" data-tip="Łącznie tokenów w całej historii">
+            <div class="stat-head"><span class="stat-ic ic-blue"><i class="ti ti-coins"></i></span></div>
+            <div class="stat-val" id="s-tokens">0</div>
+            <div class="stat-key" data-i18n="stat_tokens">Zużyte tokeny</div>
+            <div class="stat-sub" id="s-tokens-sub">—</div>
+          </article>
+
+          <article class="stat reveal" data-tip="Wszystkie requesty od startu serwera">
+            <div class="stat-head"><span class="stat-ic ic-cyan"><i class="ti ti-activity"></i></span></div>
+            <div class="stat-val" id="s-requests">0</div>
+            <div class="stat-key" data-i18n="stat_requests">Requesty</div>
+            <div class="stat-sub" id="s-requests-sub">—</div>
+          </article>
+
+          <article class="stat reveal" data-tip="Średnia i najlepsza prędkość tokenów">
+            <div class="stat-head"><span class="stat-ic ic-green"><i class="ti ti-gauge"></i></span></div>
+            <div class="stat-val" id="s-tps"><span id="s-tps-n">0</span><small>t/s</small></div>
+            <div class="stat-key" data-i18n="stat_tps">Średnia prędkość</div>
+            <div class="stat-sub" id="s-tps-sub">—</div>
+          </article>
+
+          <article class="stat reveal" data-tip="Modele GGUF w katalogu models/">
+            <div class="stat-head"><span class="stat-ic ic-amber"><i class="ti ti-stack-2"></i></span></div>
+            <div class="stat-val" id="s-models">0</div>
+            <div class="stat-key" data-i18n="stat_models">Modele na dysku</div>
+            <div class="stat-sub" id="s-models-sub">—</div>
+          </article>
+
+          <article class="stat reveal" data-tip="Czas pracy procesu serwera">
+            <div class="stat-head"><span class="stat-ic ic-pink"><i class="ti ti-heartbeat"></i></span></div>
+            <div class="stat-val" id="s-uptime">—</div>
+            <div class="stat-key" data-i18n="stat_uptime">Czas działania</div>
+            <div class="stat-sub" id="s-uptime-sub">—</div>
+          </article>
+        </div>
+
+        <div class="card reveal">
+          <div class="card-head">
+            <h3><i class="ti ti-server"></i> <span data-i18n="home_loaded_title">Załadowane modele</span></h3>
+            <span class="chip" id="slots-chip">—</span>
+          </div>
+          <div class="slot-track" id="slot-track"></div>
+          <div class="model-chips" id="home-loaded"></div>
+        </div>
+
+        <div class="card reveal">
+          <div class="card-head">
+            <h3><i class="ti ti-history"></i> <span data-i18n="home_recent_title">Ostatnie requesty</span></h3>
+            <a class="btn btn-ghost btn-sm" href="#logs" data-goto="logs">
+              <span data-i18n="home_see_all">Zobacz wszystkie</span> <i class="ti ti-arrow-narrow-right"></i>
+            </a>
+          </div>
+          <div class="table-wrap">
+            <table class="tbl" id="recent-table">
+              <thead><tr>
+                <th data-i18n="th_time">Czas</th>
+                <th data-i18n="th_model_id">Model</th>
+                <th data-i18n="th_key_name">Klucz</th>
+                <th class="num" data-i18n="th_tokens">Tokeny</th>
+                <th class="num" data-i18n="th_time_s">Czas (s)</th>
+                <th class="num" data-i18n="th_tps_short">t/s</th>
+              </tr></thead>
+              <tbody id="recent-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- MODELS ---------- -->
+      <section class="panel" id="models">
+        <div class="active-model reveal">
+          <span class="label" data-i18n="models_active_label">Wczytany w pamięci:</span>
+          <span class="value" id="active-model-name" data-i18n="models_none">Brak</span>
+        </div>
+        <div class="models-grid" id="models-list"></div>
+      </section>
+
+      <!-- ---------- KEYS ---------- -->
+      <section class="panel" id="keys">
+        <div class="card reveal">
+          <div class="card-head">
+            <h3><i class="ti ti-key"></i> <span data-i18n="keys_create_title">Nowy klucz</span></h3>
+          </div>
+          <div class="key-form">
+            <div class="field">
+              <label data-i18n="keys_name_label">Nazwa</label>
+              <input type="text" id="new-key-name" data-i18n-placeholder="keys_name_placeholder" placeholder="Mój Projekt" autocomplete="off">
             </div>
-        </section>
-
-        <!-- ZAKŁADKA POŁĄCZENIE -->
-        <section id="connect-tab" class="tab-content">
-            <div class="page-header">
-                <h1 data-i18n="conn_title">How to connect?</h1>
-                <p data-i18n="conn_desc">Use the code below to connect any app (e.g. Python script) to this local router.</p>
+            <div class="field">
+              <label data-i18n="keys_val_label">Wartość klucza</label>
+              <div class="gen-row">
+                <input type="text" id="new-key-value" data-i18n-placeholder="keys_val_placeholder" placeholder="sk-moje-api-123" autocomplete="off">
+                <button class="btn btn-ghost btn-icon" id="gen-key" data-tip="Wygeneruj losowy klucz" type="button"><i class="ti ti-wand"></i></button>
+              </div>
             </div>
-
-            <div class="code-block">
-                <div class="code-header">
-                    <span>Python (OpenAI SDK)</span>
-                    <button class="copy-btn" onclick="copyCode()" data-i18n="conn_copy">Copy</button>
-                </div>
-                <pre><code id="connection-code">...</code></pre>
-            </div>
-            
-            <div class="info-box" data-i18n="conn_tip">
-                💡 <strong>Tip:</strong> Remember to provide the exact model name from the 'Models' tab and the correct <code>api_key</code> from the 'API Keys' tab.
-            </div>
-        </section>
-
-        <!-- ZAKŁADKA USTAWIENIA -->
-        <section id="settings-tab" class="tab-content">
-            <div class="page-header">
-                <h1 data-i18n="settings_title">Settings</h1>
-                <p data-i18n="settings_desc">Configure model slots and application preferences.</p>
-            </div>
-
-            <div class="settings-section">
-                <h3 data-i18n="settings_slots_title">Model Slots Configuration</h3>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;" data-i18n="settings_slots_desc">Each slot can be assigned a different device. Models will be loaded into matching slots based on the API key's engine setting.</p>
-
-                <div id="slots-container">
-                    <!-- Slot cards loaded dynamically -->
-                </div>
-            </div>
-
-            <div class="settings-section" style="margin-top: 2rem;">
-                <h3 data-i18n="settings_loaded_title">Currently Loaded Models</h3>
-                <div id="loaded-models-container">
-                    <p style="color: var(--text-secondary);" data-i18n="settings_no_models">No models loaded.</p>
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- MODALE -->
-    <div class="modal-overlay" id="edit-modal">
-        <div class="modal-content">
-            <h3 data-i18n="modal_edit_title">Edit API key</h3>
-            <p style="margin-bottom: 1rem; color: #94a3b8; font-size: 0.9rem;" data-i18n="modal_edit_desc">Change name and value for this key.</p>
-            
-            <label style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 0.25rem; display: block;" data-i18n="modal_key_name">Key name</label>
-            <input type="text" id="edit-key-input" class="modal-input" />
-            
-            <label style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 0.25rem; display: block;" data-i18n="modal_key_val">API Key</label>
-            <input type="text" id="edit-key-value-input" class="modal-input" />
-            
-            <label style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 0.25rem; display: block; margin-top: 1rem;">Engine</label>
-            <select id="edit-key-engine-input" class="modal-input">
+            <div class="field">
+              <label data-i18n="keys_engine_label">Silnik</label>
+              <select id="new-key-engine">
                 <option value="vulkan">Vulkan</option>
                 <option value="cuda">CUDA</option>
                 <option value="cpu">CPU</option>
-            </select>
-            
-            <div class="modal-actions">
-                <button class="modal-btn secondary" onclick="closeModal('edit-modal')" data-i18n="modal_cancel">Cancel</button>
-                <button class="modal-btn primary" onclick="saveEditKey()" data-i18n="modal_save">Save</button>
+              </select>
             </div>
+            <button class="btn btn-primary" id="create-key-btn">
+              <i class="ti ti-plus"></i> <span data-i18n="keys_create_btn">Utwórz</span>
+            </button>
+          </div>
+          <div class="form-msg" id="key-error"></div>
         </div>
-    </div>
 
-    <script src="script.js?v=12"></script>
+        <div class="card reveal">
+          <div class="card-head">
+            <h3><i class="ti ti-list-details"></i> <span data-i18n="keys_list_title">Twoje klucze</span></h3>
+            <span class="chip" id="keys-count-chip">0</span>
+          </div>
+          <div class="table-wrap">
+            <table class="tbl tbl-keys">
+              <thead><tr>
+                <th data-i18n="th_name">Nazwa</th>
+                <th data-i18n="th_engine">Silnik</th>
+                <th data-i18n="th_last_used">Ostatnio użyty</th>
+                <th class="num" data-i18n="th_usage">Tokeny</th>
+                <th class="num" data-i18n="th_actions">Akcje</th>
+              </tr></thead>
+              <tbody id="keys-list"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="keys-empty" hidden>
+            <i class="ti ti-key-off"></i>
+            <p data-i18n="keys_empty">Brak kluczy. Utwórz pierwszy powyżej.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- LOGS ---------- -->
+      <section class="panel" id="logs">
+        <div id="log-keys-view">
+          <div class="keys-grid" id="log-keys-grid"></div>
+          <div class="empty" id="no-keys-msg" hidden>
+            <i class="ti ti-chart-bar-off"></i>
+            <p data-i18n="logs_no_keys">Brak kluczy. Wygeneruj je w zakładce Klucze API.</p>
+            <button class="btn btn-ghost" data-goto="keys"><i class="ti ti-arrow-left"></i> <span data-i18n="logs_go_keys">Przejdź do kluczy</span></button>
+          </div>
+        </div>
+
+        <div id="key-details" hidden>
+          <button class="btn btn-ghost" id="logs-back">
+            <i class="ti ti-arrow-left"></i> <span data-i18n="logs_back">Wróć do wyboru klucza</span>
+          </button>
+          <h2 class="detail-title" id="key-details-title"></h2>
+
+          <div class="stat-grid stat-grid-4">
+            <article class="stat reveal"><div class="stat-head"><span class="stat-ic ic-purple"><i class="ti ti-coins"></i></span></div>
+              <div class="stat-val" id="lg-tokens">0</div><div class="stat-key" data-i18n="stat_tokens">Tokeny</div></article>
+            <article class="stat reveal"><div class="stat-head"><span class="stat-ic ic-cyan"><i class="ti ti-activity"></i></span></div>
+              <div class="stat-val" id="lg-requests">0</div><div class="stat-key" data-i18n="stat_requests">Requesty</div></article>
+            <article class="stat reveal"><div class="stat-head"><span class="stat-ic ic-green"><i class="ti ti-gauge"></i></span></div>
+              <div class="stat-val"><span id="lg-avg">0</span><small>t/s</small></div><div class="stat-key" data-i18n="stat_avg_tps">Średnia</div></article>
+            <article class="stat reveal"><div class="stat-head"><span class="stat-ic ic-amber"><i class="ti ti-bolt"></i></span></div>
+              <div class="stat-val"><span id="lg-best">0</span><small>t/s</small></div><div class="stat-key" data-i18n="stat_best_tps">Rekord</div></article>
+          </div>
+
+          <div class="card reveal">
+            <div class="card-head"><h3><i class="ti ti-chart-bar"></i> <span data-i18n="logs_chart_title">Tokeny w ostatnich 24h</span></h3></div>
+            <div class="chart-box"><canvas id="usageChart"></canvas></div>
+          </div>
+
+          <div class="card reveal">
+            <div class="card-head"><h3><i class="ti ti-list-search"></i> <span data-i18n="logs_history_title">Historia zapytań</span></h3>
+              <input type="search" class="search" id="log-search" data-i18n-placeholder="js_search" placeholder="Szukaj modelu…">
+            </div>
+            <div class="table-wrap" id="logs-table-wrap">
+              <table class="tbl">
+                <thead><tr>
+                  <th data-i18n="th_time">Czas</th>
+                  <th data-i18n="th_model_id">Model</th>
+                  <th class="num" data-i18n="th_time_s">Czas (s)</th>
+                  <th class="num" data-i18n="th_ttft">TTFT (s)</th>
+                  <th class="num" data-i18n="th_tokens">Tokeny</th>
+                  <th class="num" data-i18n="th_tps">t/s (śr / min / max)</th>
+                </tr></thead>
+                <tbody id="logs-tbody"></tbody>
+              </table>
+            </div>
+            <div class="empty" id="logs-empty" hidden>
+              <i class="ti ti-inbox"></i>
+              <p data-i18n="js_no_queries">Brak zapytań dla tego klucza</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- CONNECT ---------- -->
+      <section class="panel" id="connect">
+        <div class="endpoints reveal" id="endpoints"></div>
+        <div class="card reveal">
+          <div class="card-head">
+            <h3><i class="ti ti-code"></i> <span data-i18n="conn_title">Jak się połączyć?</span></h3>
+            <div class="tabs" id="code-tabs">
+              <button class="tab is-active" data-lang="python">Python</button>
+              <button class="tab" data-lang="curl">cURL</button>
+              <button class="tab" data-lang="js">JavaScript</button>
+            </div>
+          </div>
+          <div class="code-head">
+            <span id="code-file">example.py</span>
+            <button class="btn btn-ghost btn-sm" id="copy-code"><i class="ti ti-copy"></i> <span data-i18n="conn_copy">Kopiuj</span></button>
+          </div>
+          <pre class="code" id="connection-code"></pre>
+        </div>
+        <div class="info reveal">
+          <i class="ti ti-info-circle"></i>
+          <div data-i18n="conn_tip">Podaj dokładną nazwę modelu z zakładki Modele i poprawny klucz z zakładki Klucze API.</div>
+        </div>
+      </section>
+
+      <!-- ---------- SETTINGS ---------- -->
+      <section class="panel" id="settings">
+        <div class="card reveal">
+          <div class="card-head"><h3><i class="ti ti-stack-2"></i> <span data-i18n="settings_slots_title">Sloty modeli</span></h3></div>
+          <p class="card-desc" data-i18n="settings_slots_desc">Każdy slot ma własne urządzenie. Model trafia do slotu pasującego do silnika klucza API.</p>
+          <div id="slots-container" class="slots"></div>
+        </div>
+
+        <div class="card reveal">
+          <div class="card-head"><h3><i class="ti ti-language"></i> <span data-i18n="settings_lang">Język</span></h3></div>
+          <div class="lang-row">
+            <button class="lang-btn" data-lang="pl"><i class="ti ti-flag-3"></i> Polski</button>
+            <button class="lang-btn" data-lang="en"><i class="ti ti-flag-3"></i> English</button>
+          </div>
+        </div>
+
+        <div class="card reveal">
+          <div class="card-head"><h3><i class="ti ti-cpu-2"></i> <span data-i18n="settings_loaded_title">Załadowane modele</span></h3>
+            <button class="btn btn-ghost btn-sm" id="unload-all"><i class="ti ti-trash"></i> <span data-i18n="settings_unload_all">Zwolnij wszystkie</span></button>
+          </div>
+          <div id="loaded-models-container"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div class="modal" id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+  <div class="modal-card" role="document">
+    <div class="modal-head">
+      <h3 id="modal-title"><i class="ti ti-pencil"></i> <span data-i18n="modal_edit_title">Edytuj klucz API</span></h3>
+      <button class="icon-btn" id="modal-x" aria-label="Zamknij"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="field"><label data-i18n="modal_key_name">Nazwa klucza</label><input type="text" id="edit-key-input"></div>
+    <div class="field"><label data-i18n="modal_key_val">Wartość klucza</label>
+      <div class="gen-row">
+        <input type="text" id="edit-key-value-input">
+        <button class="btn btn-ghost btn-icon" id="edit-gen-key" data-tip="Wygeneruj losowy klucz" type="button"><i class="ti ti-wand"></i></button>
+      </div>
+    </div>
+    <div class="field"><label data-i18n="modal_engine">Silnik</label>
+      <select id="edit-key-engine-input">
+        <option value="vulkan">Vulkan</option>
+        <option value="cuda">CUDA</option>
+        <option value="cpu">CPU</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel" data-i18n="modal_cancel">Anuluj</button>
+      <button class="btn btn-primary" id="modal-save"><i class="ti ti-device-floppy"></i> <span data-i18n="modal_save">Zapisz</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="confirm-modal" role="dialog" aria-modal="true" hidden>
+  <div class="modal-card modal-sm" role="document">
+    <div class="modal-head">
+      <h3><i class="ti ti-alert-triangle"></i> <span data-i18n="confirm_title">Potwierdź</span></h3>
+    </div>
+    <p id="confirm-text"></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="confirm-no" data-i18n="modal_cancel">Anuluj</button>
+      <button class="btn btn-danger" id="confirm-yes" data-i18n="confirm_yes">Usuń</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script src="vendor/chart.umd.js"></script>
+<script src="i18n.js?v=30"></script>
+<script src="script.js?v=30"></script>
 </body>
 </html>

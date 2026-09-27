@@ -1,22 +1,26 @@
 @echo off
 chcp 65001 > nul
 echo ==============================================
-echo TESTOWANIE MODELU - LOCAL LLM API
+echo   TESTOWANIE MODELU - LocalLLMAPI
 echo ==============================================
-
-set /p API_KEY="Podaj swoj klucz API (skopiuj ze strony): "
-set /p MODEL="Podaj nazwe modelu (np. gemma-3-4b-it_rai_1.7.1_npu_4K): "
-
-echo.
-echo Wysylam zapytanie testowe do modelu: %MODEL%...
-echo Oczekuj na odpowiedz (moze to potrwac kilka sekund przy pierwszym ladowaniu).
 echo.
 
-curl.exe -X POST http://127.0.0.1:8000/v1/chat/completions ^
--H "Content-Type: application/json" ^
--H "Authorization: Bearer %API_KEY%" ^
--d "{\"model\": \"%MODEL%\", \"messages\": [{\"role\": \"user\", \"content\": \"Napisz krotko 'Wszystko dziala!'\"}]}"
+set /p API_KEY="Klucz API (skopiuj z zakladki Klucze API): "
+if "%API_KEY%"=="" exit /b
+set /p MODEL="Nazwa modelu (z zakladki Modele): "
+if "%MODEL%"=="" exit /b
+
+echo.
+echo Wysylam zapytanie testowe...
+echo (Przy pierwszym uzyciu modelu moze to trwac 10-60 s - trwa wczytanie wag.)
+echo.
+
+curl.exe -N -X POST http://127.0.0.1:1000/v1/chat/completions ^
+  -H "Content-Type: application/json" ^
+  -H "Authorization: Bearer %API_KEY%" ^
+  -d "{\"model\": \"%MODEL%\", \"messages\": [{\"role\": \"user\", \"content\": \"Napisz krotko: wszystko dziala\"}], \"stream\": true}"
 
 echo.
 echo.
+echo Gotowe. Sprawdz statystyki na http://localhost:1000 (zakladka Home).
 pause

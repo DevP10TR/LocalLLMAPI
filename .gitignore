@@ -6,11 +6,16 @@ __pycache__/
 # Models and Large Files
 models/*.gguf
 models/*.bin
+models/*.zip
 
 # Logs and Databases
 logs.db
+logs.db-wal
+logs.db-shm
+backend/*.db
 *.log
 error.txt
+server.log
 
 # Environments
 .env
