@@ -33,6 +33,9 @@ DYNAMIC = {
     *(f"sub_{n}" for n in ("home", "models", "keys", "logs", "connect", "settings")),
     "nav_expand",
     "nav_collapse",
+    # Klucze dokumentacji budowane z tablic w script.js (DOC_PARAMS,
+    # DOC_ENDPOINTS, DOC_ERRORS) — regex ich nie widzi.
+    *(re.findall(r"'(docs_[a-z0-9_]+)'", (ROOT / "web" / "script.js").read_text(encoding="utf-8"))),
 }
 used |= DYNAMIC
 

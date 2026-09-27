@@ -367,6 +367,93 @@
           </div>
           <div class="slots" id="loaded-models-container"></div>
         </div>
+
+        <!-- ---------- DOCS ---------- -->
+        <div class="card" id="docs-card">
+          <div class="card-head">
+            <h3><i class="ti ti-book"></i> <span data-i18n="docs_title">Documentation</span></h3>
+            <span class="chip mono" id="docs-base">—</span>
+          </div>
+
+          <!-- 1. Przeladowanie modelu -->
+          <div class="doc-sec">
+            <h4><i class="ti ti-repeat"></i> <span data-i18n="docs_reload_title">Reloading a model</span></h4>
+            <p data-i18n="docs_reload_desc">A model is read from disk the first time it is used and released from memory automatically after 2 minutes without activity. To force a fresh load, unload it first — the next request reads it again.</p>
+            <div class="doc-rows">
+              <div class="doc-row">
+                <span class="doc-k" data-i18n="docs_reload_ui">From the panel</span>
+                <span class="doc-v">
+                  <b data-i18n="docs_reload_ui_hint">Unload all</b>
+                  <span data-i18n="docs_reload_ui_desc">in this tab, or the bin icon next to a loaded model to unload just that one.</span>
+                </span>
+              </div>
+              <div class="doc-row">
+                <span class="doc-k">curl</span>
+                <span class="doc-v"><code class="copyable" id="doc-unload-one">—</code></span>
+              </div>
+              <div class="doc-row">
+                <span class="doc-k">curl</span>
+                <span class="doc-v"><code class="copyable" id="doc-unload-all">—</code></span>
+              </div>
+              <div class="doc-row">
+                <span class="doc-k" data-i18n="docs_reload_slot">Slot device</span>
+                <span class="doc-v" data-i18n="docs_reload_slot_desc">Changing a slot's device makes the next request load the model into a matching slot instead.</span>
+              </div>
+              <div class="doc-row">
+                <span class="doc-k" data-i18n="docs_reload_busy">While in use</span>
+                <span class="doc-v" data-i18n="docs_reload_busy_desc">A model with active requests is never unloaded. If every slot is busy the API returns <code>503</code> — retry in a moment.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Co wysylac -->
+          <div class="doc-sec">
+            <h4><i class="ti ti-send"></i> <span data-i18n="docs_send_title">Sending a request</span></h4>
+            <p data-i18n="docs_send_desc">Every call needs a bearer token from the API Keys tab. The <code>model</code> field must match the file name exactly, including the <code>.gguf</code> suffix.</p>
+            <div class="table-wrap">
+              <table class="tbl">
+                <thead><tr>
+                  <th data-i18n="docs_field">Field</th>
+                  <th data-i18n="docs_required">Required</th>
+                  <th data-i18n="docs_default">Default</th>
+                  <th data-i18n="docs_meaning">Meaning</th>
+                </tr></thead>
+                <tbody id="docs-params"></tbody>
+              </table>
+            </div>
+            <pre class="code doc-code" id="docs-curl">—</pre>
+          </div>
+
+          <!-- 3. Endpointy -->
+          <div class="doc-sec">
+            <h4><i class="ti ti-list"></i> <span data-i18n="docs_endpoints_title">Endpoints</span></h4>
+            <div class="table-wrap">
+              <table class="tbl">
+                <thead><tr>
+                  <th data-i18n="docs_method">Method</th>
+                  <th data-i18n="docs_path">Path</th>
+                  <th data-i18n="docs_auth">Auth</th>
+                  <th data-i18n="docs_purpose">Purpose</th>
+                </tr></thead>
+                <tbody id="docs-endpoints"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 4. Bledy -->
+          <div class="doc-sec">
+            <h4><i class="ti ti-alert-circle"></i> <span data-i18n="docs_errors_title">Errors</span></h4>
+            <div class="table-wrap">
+              <table class="tbl">
+                <thead><tr>
+                  <th data-i18n="docs_status">Status</th>
+                  <th data-i18n="docs_meaning">Meaning</th>
+                </tr></thead>
+                <tbody id="docs-errors"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </section>
 
     </div>

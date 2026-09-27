@@ -248,6 +248,70 @@ async def main() -> int:
         r = await client.get("/vendor/fonts/tabler-icons.woff2")
         check("font Tabler serwowany", r.status_code == 200, f"{len(r.content)} bajtow")
 
+        print("\n[9] Kontrakt dokumentacji: statusy musza zgadzac sie z docsami")
+        # Sekcja "Errors" w panelu (web/script.js -> DOC_ERRORS) musi wymieniac
+        # dokladnie te statusy, ktore faktycznie zwraca API. Klamstwo w
+        # dokumentacji jest gorsze niz jej brak.
+        body = {"model": "fake.gguf", "messages": [{"role": "user", "content": "hi"}]}
+
+        r = await client.post("/v1/chat/completions", json=body)
+        check("brak naglowka Authorization -> 403", r.status_code == 403, f"jest {r.status_code}")
+
+        r = await client.post(
+            "/v1/chat/completions", json=body, headers={"Authorization": "Bearer nope"}
+        )
+        check("bledny klucz -> 401", r.status_code == 401, f"jest {r.status_code}")
+
+        r = await client.post(
+            "/v1/chat/completions",
+            content=b"{ not json",
+            headers={"Authorization": "Bearer nope", "Content-Type": "application/json"},
+        )
+        check("uszkodzony JSON -> 422", r.status_code == 422, f"jest {r.status_code}")
+
+        r = await client.post("/api/keys", json={"name": "D", "api_key": KEY, "engine": "cpu"})
+        check("duplikat wartosci klucza -> 400", r.status_code == 400, f"jest {r.status_code}")
+
+        # 503: wszystkie sloty zajete przez aktywne (sztuczne) requesty
+        with rs.models_lock:
+            rs.loaded_models.clear()
+            rs._slots_reserved.update({1, 2, 3})
+        try:
+            await rs.load_model("third.gguf", "cpu")
+            s503 = None
+        except rs.HTTPException as e:
+            s503 = e.status_code
+        check("wszystkie sloty zajete -> 503", s503 == 503, f"jest {s503}")
+        with rs.models_lock:
+            rs._slots_reserved.clear()
+
+        # Wyciagnij statusy z tabeli bledow w panelu
+        import re as _re
+        from pathlib import Path as _Path
+
+        _root = _Path(__file__).resolve().parent.parent
+        web_js = (_root / "web" / "script.js").read_text(encoding="utf-8")
+        block = web_js.split("const DOC_ERRORS = [")[1].split("];")[0]
+        doc_statuses = set(_re.findall(r"\['(\d+|ctx)',\s*'(\d+|—)'", block))
+        documented = {s for s, _ in doc_statuses}
+        real = {"400", "401", "403", "422", "503", "ctx"}
+        check("docs wymieniaja dokladnie prawdziwe statusy", documented == real,
+              f"w docs: {sorted(documented)}, brakuje: {sorted(real - documented)}")
+
+        # Endpointy z tabeli musza istniec w aplikacji. Porownujemy ksztalt
+        # sciezki: /api/keys/<b>{id}</b> -> /api/keys/{}  ==  /api/keys/{api_key_id}
+        def shape(p: str) -> str:
+            p = _re.sub(r"</?b>", "", p)
+            p = _re.sub(r"\{[^}]+\}", "{}", p)
+            return p
+
+        routes = {shape(r.path) for r in rs.app.routes if hasattr(r, "path")}
+        block = web_js.split("const DOC_ENDPOINTS = [")[1].split("];")[0]
+        paths = _re.findall(r"'(get|post|put|delete)',\s*'([^']+)'", block)
+        missing_ep = [p for _, p in paths if shape(p) not in routes]
+        check("endpointy z tabeli istnieja w aplikacji", not missing_ep,
+              f"brak: {missing_ep}; w aplikacji: {sorted(routes)}")
+
         await client.aclose()
 
     finally:

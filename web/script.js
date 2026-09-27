@@ -182,7 +182,7 @@ function showTab(name, push = true) {
   stagger(panel);
   if (push && location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
 
-  if (name === 'settings') { loadSlots(); loadLoadedModels(); }
+  if (name === 'settings') { loadSlots(); loadLoadedModels(); renderDocs(); }
   if (name === 'home') loadStats();
   refresh(true);
 }
@@ -935,12 +935,125 @@ $('#unload-all').addEventListener('click', () =>
   }));
 
 /* ==========================================================================
+   DOKUMENTACJA (w zakladce Ustawienia)
+   Tresc generowana z zywych danych — adres IP, klucz i nazwy modeli
+   sa wklejane prosto do przykladow, wiec da sie je skopiowac i uruchomic.
+   ========================================================================== */
+const baseUrl = () => `http://${serverIp}:${PORT}`;
+
+const DOC_PARAMS = [
+  ['model', true, '—', 'docs_p_model'],
+  ['messages', true, '—', 'docs_p_messages'],
+  ['stream', false, 'false', 'docs_p_stream'],
+  ['temperature', false, '0.7', 'docs_p_temperature'],
+  ['max_tokens', false, '4096', 'docs_p_max_tokens'],
+];
+
+const DOC_ENDPOINTS = [
+  ['post', '/v1/chat/completions', true, 'docs_e_chat'],
+  ['get', '/v1/models', false, 'docs_e_models'],
+  ['get', '/api/status', false, 'docs_e_status'],
+  ['get', '/api/stats', false, 'docs_e_stats'],
+  ['get', '/api/keys', false, 'docs_e_keys_get'],
+  ['post', '/api/keys', false, 'docs_e_keys_post'],
+  ['put', '/api/keys/<b>{id}</b>', false, 'docs_e_keys_put'],
+  ['delete', '/api/keys/<b>{id}</b>', false, 'docs_e_keys_del'],
+  ['get', '/api/logs/<b>{id}</b>', false, 'docs_e_logs'],
+  ['get', '/api/settings/slots', false, 'docs_e_slots_get'],
+  ['put', '/api/settings/slots', false, 'docs_e_slots_put'],
+  ['post', '/api/unload', false, 'docs_e_unload'],
+  ['get', '/docs', false, 'docs_e_swagger'],
+];
+
+/* Statusy zweryfikowane przeciwko backendowi w tools/test_backend.py
+   ("kontrakt dokumentacji") — nie zmieniaj ich bez aktualizacji testu. */
+const DOC_ERRORS = [
+  ['400', '400', 'docs_x_400'],
+  ['401', '401', 'docs_x_401'],
+  ['403', '403', 'docs_x_403'],
+  ['422', '422', 'docs_x_422'],
+  ['503', '503', 'docs_x_503'],
+  ['ctx', '—', 'docs_x_ctx'],
+];
+
+function docCell(value) {
+  if (typeof value !== 'string') return el('span', { text: value });
+  // Maly helper: <b> w tresci endpointu psuje inaczej tresc cell.
+  const parts = value.split(/(<b>.*?<\/b>)/g);
+  const node = el('span');
+  for (const p of parts) {
+    if (!p) continue;
+    if (p.startsWith('<b>')) node.append(el('b', { text: p.slice(3, -4) }));
+    else node.append(p);
+  }
+  return node;
+}
+
+function renderDocs() {
+  const base = baseUrl();
+
+  $s('docs-base').textContent = `${base}/v1`;
+
+  // --- 1. przeladowanie modelu ---
+  const loadedNames = Object.keys(loadedModelsCache);
+  const sample = loadedNames[0] || 'MODEL_NAME.gguf';
+  $s('doc-unload-one').textContent =
+    `curl -X POST "${base}/api/unload?model_name=${sample}"`;
+  $s('doc-unload-all').textContent = `curl -X POST "${base}/api/unload"`;
+
+  // --- 2. parametry zapytania ---
+  $s('docs-params').replaceChildren(...DOC_PARAMS.map(([name, req, def, descKey]) => el('tr', {},
+    el('td', {}, el('code', { class: 'docs-path', text: name })),
+    el('td', {}, el('span', { class: req ? 'docs-yes' : 'docs-auth no', text: req ? 'yes' : 'no' })),
+    el('td', { class: 'dim' }, el('code', { class: 'mono', text: def })),
+    el('td', {}, docCell(t(descKey))),
+  )));
+
+  // --- 3. przyklad curl z zywymi danymi ---
+  const key = keysCache[0]?.api_key || 'sk-YOUR_API_KEY';
+  const model = sample;
+  $s('docs-curl').textContent =
+    `curl -N -X POST "${base}/v1/chat/completions" \\\n` +
+    `  -H "Content-Type: application/json" \\\n` +
+    `  -H "Authorization: Bearer ${key}" \\\n` +
+    `  -d '{\n` +
+    `    "model": "${model}",\n` +
+    `    "messages": [{"role": "user", "content": "Hello!"}],\n` +
+    `    "stream": true\n` +
+    `  }'`;
+
+  // --- 4. endpointy ---
+  $s('docs-endpoints').replaceChildren(...DOC_ENDPOINTS.map(([method, path, auth, descKey]) => el('tr', {},
+    el('td', {}, el('span', { class: `docs-method m-${method}`, text: method.toUpperCase() })),
+    el('td', {}, el('code', { class: 'docs-path' }, docCell(path))),
+    el('td', {}, el('span', {
+      class: `docs-auth ${auth ? 'docs-yes' : 'no'}`,
+      text: auth ? t('docs_bearer') : t('docs_open'),
+    })),
+    el('td', {}, docCell(t(descKey))),
+  )));
+
+  // --- 5. bledy ---
+  $s('docs-errors').replaceChildren(...DOC_ERRORS.map(([status, label, descKey]) => el('tr', { class: 'docs-err-row' },
+    el('td', {}, el('span', { class: `docs-status s${status}`, text: label })),
+    el('td', {}, docCell(t(descKey))),
+  )));
+}
+
+$('#docs-card').addEventListener('click', (e) => {
+  const code = e.target.closest('code.copyable');
+  if (code) copyAndToast(code.textContent, code);
+});
+
+/* ==========================================================================
    POLLING
    ========================================================================== */
 let online = null;
 let timer = null;
 let failures = 0;
 let refreshing = false;
+/* Nazwy modeli w pamieci — potrzebne w przykladach w dokumentacji. */
+let loadedModelsCache = {};
 
 function setStatus(isOnline, sub) {
   $s('status-indicator').classList.toggle('is-online', isOnline);
@@ -983,6 +1096,7 @@ async function refresh(force = false) {
     updateServerIp(status.local_ip);
 
     const loadedNames = Object.keys(status.loaded_models || {});
+    loadedModelsCache = status.loaded_models || {};
     $s('active-model-name').textContent = loadedNames[0] || t('models_none');
 
     if (currentTab === 'home') await loadStats();
@@ -1017,7 +1131,7 @@ async function poll() {
       setStatus(true, `${status.local_ip}:${status.port}`);
       updateServerIp(status.local_ip);
       if (JSON.stringify(keys) !== JSON.stringify(keysCache)) renderKeys(keys);
-      if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); }
+      if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); renderDocs(); }
       if (currentLogKey) await loadLogs();
     }
     failures = 0;
@@ -1035,7 +1149,7 @@ $('#refresh-now').addEventListener('click', async (e) => {
   keysCache = [];
   await refresh(true);
   if (currentLogKey) await loadLogs();
-  if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); }
+  if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); renderDocs(); }
   btn.classList.remove('is-spinning');
 });
 
@@ -1073,6 +1187,6 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 else start();
 
 /* i18n.js potrzebuje tych, żeby przerysować dane po zmianie języka. */
-window.LLMAPI = { toast, showTab, loadStats, renderCode, renderEndpoints, renderKeys, applyRail };
+window.LLMAPI = { toast, showTab, loadStats, renderCode, renderEndpoints, renderKeys, renderDocs, applyRail };
 
 })();

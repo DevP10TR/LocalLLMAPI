@@ -589,6 +589,103 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
     String(fresh.window.localStorage.getItem('llmapi.rail')));
   fresh.window.close();
 
+  // DOKUMENTACJA
+  console.log('\n[18] Dokumentacja w Ustawieniach');
+  $('.nav-item[data-tab="settings"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await sleep(600);
+
+  const docs = $('#docs-card');
+  check('karta Docs istnieje', !!docs);
+  check('karta Docs widoczna', docs && window.getComputedStyle(docs).display !== 'none');
+  // compareDocumentPosition: 2 = PRECEDING, czyli target jest PRZED docs,
+  // a wiec karta Docs lezy nizej — dokladnie to, o co prosimy.
+  const loadedPos = docs.compareDocumentPosition($('#loaded-models-container'));
+  check('Docs sa POD sekcja slotow i jezyka', (loadedPos & 2) === 2,
+    `compareDocumentPosition=${loadedPos} (oczekiwano bitu 2 = PRECEDING)`);
+
+  const secTitles = [...docs.querySelectorAll('.doc-sec h4 span')].map((n) => n.textContent.trim());
+  check('4 sekcje dokumentacji', secTitles.length === 4, secTitles.join(' | '));
+  check('sekcja o przeladowaniu modelu', /[Rr]eloading|Przeładowanie/.test(secTitles[0]), secTitles[0]);
+  check('sekcja o wysylaniu zapytania', /[Ss]ending|Wysyłanie/.test(secTitles[1]), secTitles[1]);
+  check('sekcja endpointow', /[Ee]ndpoint/.test(secTitles[2]), secTitles[2]);
+  check('sekcja bledow', /[Ee]rror|Błęd/.test(secTitles[3]), secTitles[3]);
+
+  // Zadne klucze i18n nie powinny byc widoczne jako tekst
+  const docsText = docs.textContent;
+  const leaks = ['docs_', 'nav_', 'js_', 'settings_', 'stat_', 'confirm_', 'th_'];
+  const found = leaks.filter((p) => docsText.includes(p));
+  check('brak surowych kluczy i18n w widocznej tresci', found.length === 0, found.join(', '));
+
+  // Zywe dane
+  check('chip base URL zawiera adres i port',
+    $('#docs-base').textContent === 'http://192.168.1.40:1000/v1', $('#docs-base').textContent);
+  check('cmd unload pojedynczego modelu ma URL',
+    $('#doc-unload-one').textContent.includes('/api/unload?model_name='), $('#doc-unload-one').textContent);
+  check('cmd unload wszystkich ma URL',
+    $('#doc-unload-all').textContent === 'curl -X POST "http://192.168.1.40:1000/api/unload"',
+    $('#doc-unload-all').textContent);
+  check('cmd unload uzywa zaloadowanego modelu jako przyklad',
+    $('#doc-unload-one').textContent.includes('gemma.gguf'), $('#doc-unload-one').textContent);
+
+  // Tabela parametrow
+  const paramRows = [...$('#docs-params').querySelectorAll('tr')];
+  check('5 parametrow zapytania', paramRows.length === 5, `wierszy=${paramRows.length}`);
+  const paramNames = paramRows.map((r) => r.querySelector('.docs-path').textContent.trim());
+  check('parametry: model, messages, stream, temperature, max_tokens',
+    JSON.stringify(paramNames) === JSON.stringify(['model', 'messages', 'stream', 'temperature', 'max_tokens']),
+    paramNames.join(','));
+  check('model i messages oznaczone wymagane',
+    paramRows.slice(0, 2).every((r) => r.querySelector('.docs-yes')), '');
+  check('stream ma domysl false',
+    paramRows[2].querySelector('.mono').textContent.trim() === 'false',
+    paramRows[2].querySelector('.mono').textContent);
+
+  // Przyklad curl
+  const curl = $('#docs-curl').textContent;
+  check('przyklad curl wskazuje /v1/chat/completions', curl.includes('/v1/chat/completions'));
+  check('przyklad curl ma naglowek Authorization', curl.includes('Authorization: Bearer'));
+  check('przyklad curl ma klucz z API Keys', curl.includes('sk-alpha-111111'), 'klucz podstawiony z listy');
+  check('przyklad curl ma Content-Type', curl.includes('Content-Type: application/json'));
+  check('przyklad curl ma model', curl.includes('"model"'));
+  check('przyklad curl ma stream true', curl.includes('"stream": true'));
+
+  // Endpointy
+  const epRows = [...$('#docs-endpoints').querySelectorAll('tr')];
+  check('13 endpointow w tabeli', epRows.length === 13, `wierszy=${epRows.length}`);
+  const paths = epRows.map((r) => r.querySelector('.docs-path').textContent.trim());
+  check('endpointy: chat completions i models',
+    paths.includes('/v1/chat/completions') && paths.includes('/v1/models'));
+  check('endpointy: unload i slots',
+    paths.includes('/api/unload') && paths.includes('/api/settings/slots'));
+  check('tylko chat completions wymaga bearer',
+    epRows.filter((r) => r.querySelector('.docs-yes')).length === 1,
+    `${epRows.filter((r) => r.querySelector('.docs-yes')).length} z autoryzacja`);
+  check('endpointy z {id} maja pogrubienie placeholdera',
+    $('#docs-endpoints').querySelector('.docs-path b') !== null);
+  check('brak surowego <b> w tekst endpointu',
+    !paths.some((p) => p.includes('<b>') || p.includes('</b>')), paths.filter((p) => p.includes('b>')).join(','));
+
+  // Bledy
+  const errRows = [...$('#docs-errors').querySelectorAll('tr')];
+  check('6 wierszy bledow', errRows.length === 6, `wierszy=${errRows.length}`);
+  const statuses = errRows.map((r) => r.querySelector('.docs-status').textContent.trim());
+  check('bledy: 400, 401, 403, 422, 503, kontekst',
+    JSON.stringify(statuses) === JSON.stringify(['400', '401', '403', '422', '503', '—']),
+    statuses.join(','));
+  check('503 ma osobny kolor', $('#docs-errors').querySelector('.docs-status.s503') !== null);
+  check('401 i 403 maja kolor ostrzegawczy',
+    $('#docs-errors').querySelector('.docs-status.s401') !== null &&
+    $('#docs-errors').querySelector('.docs-status.s403') !== null);
+
+  // Kopiowanie komendy
+  copied = null;
+  $('#doc-unload-all').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await sleep(300);
+  check('klikniecie komendy kopiuje ja', copied === $('#doc-unload-all').textContent, `copied=${String(copied).slice(0, 40)}`);
+
+  check('brak bledow JS w dokumentacji', consoleErrors.length === 0,
+    consoleErrors.slice(0, 3).join(' | '));
+
   check('brak bledow JS po wszystkich kliknieciach', consoleErrors.length === 0,
     consoleErrors.slice(0, 3).join(' | '));
 
