@@ -1,0 +1,7 @@
+# Zależności deweloperskie (testy) — niepotrzebne do uruchomienia aplikacji.
+#   pip install -r requirements.txt -r requirements-dev.txt
+#   npm install        (jsdom dla testów interakcji w przeglądarce)
+
+# Testy backendu (tools/test_backend.py) używają ASGITransport zamiast
+# starlette TestClient — TestClient jest niekompatybilny z httpx >= 0.28.
+httpx>=0.28

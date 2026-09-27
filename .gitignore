@@ -28,7 +28,6 @@ venv.bak/
 
 # Node (tylko dev: jsdom do testow interakcji)
 node_modules/
-package-lock.json
 
 # IDEs and Editors
 .vscode/

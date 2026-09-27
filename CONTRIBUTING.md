@@ -1,28 +1,60 @@
 # Contributing to LocalLLMAPI
 
-First off, thank you for considering contributing to LocalLLMAPI! It's people like you that make open source such a great community.
+Thank you for considering contributing.
 
-## How Can I Contribute?
+## Setup
 
-### Reporting Bugs
-This section guides you through submitting a bug report for LocalLLMAPI. Following these guidelines helps maintainers and the community understand your report, reproduce the behavior, and find related reports.
-* Use a clear and descriptive title for the issue to identify the problem.
-* Describe the exact steps which reproduce the problem in as many details as possible.
-* Provide specific examples to demonstrate the steps.
+```bat
+pip install -r requirements.txt -r requirements-dev.txt
+npm install
+```
 
-### Suggesting Enhancements
-This section guides you through submitting an enhancement suggestion for LocalLLMAPI, including completely new features and minor improvements to existing functionality.
-* Use a clear and descriptive title for the issue to identify the suggestion.
-* Provide a step-by-step description of the suggested enhancement in as many details as possible.
-* Explain why this enhancement would be useful to most users.
+The first command installs the runtime and test dependencies, the second
+installs `jsdom`, which is used **only** by the browser interaction tests. The
+application itself has no Node dependency — `npm` is not needed to run it.
 
-### Pull Requests
-* Fill in the required template
-* Do not include issue numbers in the PR title
-* Include screenshots and animated GIFs in your pull request whenever possible.
-* End all files with a newline.
+## Running the tests
 
-## Setup for Development
-1. Clone the repository
-2. Install Python requirements (`pip install -r requirements.txt`)
-3. Make sure to test your code before submitting a Pull Request!
+Everything runs offline and loads no model, so the suite is fast and safe to
+run on a laptop.
+
+```bat
+python tools\test_backend.py     :: server, model registry, API contract
+node tools\test_keys.js          :: every button, sidebar, tooltip, docs
+node tools\test_frontend.js      :: syntax, i18n, icons, security, assets
+python tools\check_frontend.py   :: HTML/JS consistency: ids, i18n keys, icons
+python tools\check_i18n.py       :: per-language key completeness
+```
+
+All five must pass before you open a pull request. `test_backend.py` and
+`test_keys.js` exit non-zero on failure, so they work in CI as-is.
+
+## Things worth knowing before you change something
+
+- **The i18n dictionaries must stay in sync.** `check_i18n.py` verifies each
+  language separately and fails on keys that exist in one but not the other,
+  or that nothing uses. This exists because that bug shipped once: a missing
+  English key rendered as `65d time_ago` in the interface.
+- **The documentation is under test.** The error table in the **Docs** tab is
+  compared against the real API responses by `test_backend.py`. If you change
+  a status code, update `DOC_ERRORS` in `web/script.js` in the same commit.
+- **Never build HTML from user data.** `el()` in `web/script.js` deliberately
+  has no `html:` option. Model names and API key names come from the database
+  and end up in the DOM — keep it that way.
+- **Model loading must not block the event loop.** `Llama()` is built in a
+  worker thread, each model has its own lock, and `release_model()` runs in a
+  `finally`. These are not stylistic choices; removing any of them reintroduces
+  frozen servers, VRAM leaks or permanent `503`s.
+
+## Pull requests
+
+- One concern per commit; the message should explain *why*, not *what*.
+- Reference the issue number in the body, not the title.
+- Include a screenshot for anything visual.
+- End files with a newline.
+
+## Reporting bugs
+
+Include the model name, the slot configuration, the engine, and the relevant
+part of `error.txt` (it is rotated automatically). The tabler at the bottom of
+the sidebar shows whether the server is reachable.
