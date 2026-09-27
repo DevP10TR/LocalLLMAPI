@@ -5,6 +5,7 @@ let selectedKeyId = null;
 
 let lastModelsDataStr = "";
 let lastKeysDataStr = "";
+let activeModel = null;
 
 // Obsługa zakładek
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -79,6 +80,7 @@ function updateChart(logs) {
 async function createApiKey() {
     const name = document.getElementById("new-key-name").value;
     const val = document.getElementById("new-key-value").value;
+    const engine = document.getElementById("new-key-engine").value || 'vulkan';
     const errDiv = document.getElementById("key-error");
     
     if (!name || !val) {
@@ -90,7 +92,7 @@ async function createApiKey() {
         const res = await fetch(`${API_BASE}/api/keys`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: name, api_key: val})
+            body: JSON.stringify({name: name, api_key: val, engine: engine})
         });
         
         if (res.ok) {
@@ -136,18 +138,17 @@ async function fetchKeyDetails() {
             if (logsData.length > 0) {
                 const reversedLogs = [...logsData].reverse();
                 logsTbody.innerHTML = reversedLogs.map((log, index) => {
-                    const date = new Date(log.timestamp * 1000);
-                    const timeStr = date.toLocaleTimeString('pl-PL');
                     return `
                         <tr class="animate-fade-in-up" style="animation-delay: ${index * 0.05}s">
-                            <td>${timeStr}</td>
-                                <td>
-                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                        <span style="color: var(--accent); font-family: monospace;">${log.model}</span>
-                                        <button onclick="copyToClipboard('${log.model}')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 2px;" title=t('js_copy_id')><i class="ph ph-copy"></i></button>
-                                    </div>
-                                </td>
+                            <td>${new Date(log.timestamp * 1000).toLocaleString('en-US')}</td>
+                            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                    <span title="${log.model}">${log.model}</span>
+                                    <button onclick="copyToClipboard('${log.model}')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 2px;" title="Copy Model ID"><i class="ph ph-copy"></i></button>
+                                </div>
+                            </td>
                             <td>${log.elapsed_seconds}</td>
+                            <td>${log.ttft !== undefined ? log.ttft : '0.00'}</td>
                             <td>${log.total_tokens}</td>
                             <td style="color: var(--success);">
                                 <strong>${log.tokens_per_second}</strong>
@@ -159,7 +160,7 @@ async function fetchKeyDetails() {
                     `;
                 }).join('');
             } else {
-                logsTbody.innerHTML = `<tr><td colspan="5" style="color: #888; text-align: center;">Brak zapytań dla tego klucza</td></tr>`;
+                logsTbody.innerHTML = `<tr><td colspan="6" style="color: #888; text-align: center;">No requests for this key</td></tr>`;
             }
         }
     } catch (e) {
@@ -179,7 +180,8 @@ async function fetchData() {
             const statusData = await statusRes.json();
             statusIndicator.classList.add("online");
             statusText.textContent = "Online";
-            activeModelName.textContent = statusData.active_model || "Brak modelu w pamięci";
+            activeModel = statusData.active_model;
+            activeModelName.textContent = activeModel || "None";
             
             if (statusData.local_ip) {
                 currentIp = statusData.local_ip;
@@ -211,7 +213,7 @@ async function fetchData() {
                                 <div class="api-id-label">API Model ID</div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
                                     <div class="api-id-value" style="margin-top: 0;">${m.id}</div>
-                                    <button onclick="copyToClipboard('${m.id}')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 2px;" title=t('js_copy_id')><i class="ph ph-copy"></i></button>
+                                    <button onclick="copyToClipboard('${m.id}')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 2px;" title="Copy Model ID"><i class="ph ph-copy"></i></button>
                                 </div>
                             </div>
                         `;
@@ -279,7 +281,7 @@ async function fetchData() {
                                     <td><div class="checkbox-custom"></div></td>
                                     <td>
                                         <div class="key-name-block">
-                                            <strong>${k.name}</strong>
+                                            <strong>${k.name}</strong> <span style="font-size: 0.75rem; color: #3b82f6; background: rgba(59,130,246,0.1); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">${(k.engine || 'vulkan').toUpperCase()}</span>
                                             <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
                                                 <span class="blurred-key" id="key-val-${k.id}" onclick="copyToClipboard('${k.api_key}')" title="Kliknij aby skopiować">${keyString}</span>
                                                 <button onclick="copyToClipboard('${k.api_key}')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 2px;"><i class="ph ph-copy"></i></button>
@@ -296,10 +298,14 @@ async function fetchData() {
                                     </td>
                                     <td>
                                         <div class="kebab-menu">
-                                            <button class="kebab-button" onclick="toggleDropdown(${k.id}, event)"><i class="ph ph-dots-three-vertical"></i></button>
+                                            <button class="kebab-button" onclick="toggleDropdown(event, ${k.id})"><i class="ph ph-dots-three-vertical"></i></button>
                                             <div class="dropdown-menu" id="dropdown-${k.id}">
-                                                <a href="#" onclick="openRenameModal(${k.id}, '${k.name}'); event.preventDefault();"><i class="ph ph-pencil-simple"></i> Zmień nazwę</a>
-                                                <a href="#" onclick="deleteKey(${k.id}); event.preventDefault();" style="color: #ef4444;"><i class="ph ph-trash"></i> Usuń klucz</a>
+                                                <a href="#" onclick="changeLoader(${k.id}, '${k.name.replace(/'/g, "\\'")}', '${k.api_key.replace(/'/g, "\\'")}', 'vulkan'); event.preventDefault();"><i class="ph ph-cpu"></i> Loader: Vulkan</a>
+                                                <a href="#" onclick="changeLoader(${k.id}, '${k.name.replace(/'/g, "\\'")}', '${k.api_key.replace(/'/g, "\\'")}', 'cuda'); event.preventDefault();"><i class="ph ph-cpu"></i> Loader: CUDA</a>
+                                                <a href="#" onclick="changeLoader(${k.id}, '${k.name.replace(/'/g, "\\'")}', '${k.api_key.replace(/'/g, "\\'")}', 'cpu'); event.preventDefault();"><i class="ph ph-cpu"></i> Loader: CPU</a>
+                                                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.25rem 0;">
+                                                <a href="#" onclick="editKey(${k.id}, '${k.name.replace(/'/g, "\\'")}', '${k.api_key.replace(/'/g, "\\'")}', '${k.engine || 'vulkan'}'); event.preventDefault();"><i class="ph ph-pencil-simple"></i> Rename / Edit Key</a>
+                                                <a href="#" onclick="deleteKey(${k.id}); event.preventDefault();" style="color: #ef4444;"><i class="ph ph-trash"></i> Delete Key</a>
                                             </div>
                                         </div>
                                     </td>
@@ -325,14 +331,41 @@ async function fetchData() {
 // Obsługa Dropdownów
 function toggleDropdown(e, id) {
     e.stopPropagation();
-    document.querySelectorAll('.dropdown-menu').forEach(menu => {
-        if(menu.id !== `dropdown-${id}`) menu.classList.remove('show');
+    
+    document.querySelectorAll('tr').forEach(tr => {
+        tr.style.zIndex = '';
+        tr.style.position = '';
     });
-    document.getElementById(`dropdown-${id}`).classList.toggle('show');
+    
+    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        if(menu.id !== `dropdown-${id}`) {
+            menu.classList.remove('show');
+            menu.parentElement.classList.remove('active');
+        }
+    });
+    
+    const dropdown = document.getElementById(`dropdown-${id}`);
+    dropdown.classList.toggle('show');
+    dropdown.parentElement.classList.toggle('active');
+    
+    if (dropdown.classList.contains('show')) {
+        const tr = dropdown.closest('tr');
+        if (tr) {
+            tr.style.position = 'relative';
+            tr.style.zIndex = '9999';
+        }
+    }
 }
 
 window.addEventListener('click', () => {
-    document.querySelectorAll('.dropdown-menu').forEach(menu => menu.classList.remove('show'));
+    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        menu.classList.remove('show');
+        menu.parentElement.classList.remove('active');
+    });
+    document.querySelectorAll('tr').forEach(tr => {
+        tr.style.zIndex = '';
+        tr.style.position = '';
+    });
 });
 
 // Akcje Menu
@@ -354,23 +387,27 @@ function copyToClipboard(text) {
     });
 }
 
-function editKey(id, oldName, oldKey) {
+function editKey(id, oldName, oldKey, oldEngine) {
     editingKeyId = id;
     document.getElementById('edit-key-input').value = oldName;
     document.getElementById('edit-key-value-input').value = oldKey;
+    if(document.getElementById('edit-key-engine-input')) {
+        document.getElementById('edit-key-engine-input').value = oldEngine || 'vulkan';
+    }
     document.getElementById('edit-modal').classList.add('show');
 }
 
 async function saveEditKey() {
     const newName = document.getElementById('edit-key-input').value;
     const newKey = document.getElementById('edit-key-value-input').value;
+    const newEngine = document.getElementById('edit-key-engine-input') ? document.getElementById('edit-key-engine-input').value : 'vulkan';
     if (!newName || !newKey || !editingKeyId) return;
     
     try {
         const res = await fetch(`${API_BASE}/api/keys/${editingKeyId}`, {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: newName, api_key: newKey})
+            body: JSON.stringify({name: newName, api_key: newKey, engine: newEngine})
         });
         if (res.ok) {
             closeModal('edit-modal');
@@ -378,6 +415,19 @@ async function saveEditKey() {
         }
     } catch (e) {
         console.error("Błąd edycji klucza");
+    }
+}
+
+async function changeLoader(id, name, apiKey, newEngine) {
+    try {
+        const res = await fetch(`${API_BASE}/api/keys/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: name, api_key: apiKey, engine: newEngine})
+        });
+        if (res.ok) fetchData();
+    } catch (e) {
+        console.error("Error changing loader");
     }
 }
 
@@ -398,16 +448,16 @@ function updateConnectionCode() {
     const codeBlock = document.getElementById("connection-code");
     const code = `from openai import OpenAI
 
-# Połączenie do lokalnego routera
+# Connection to the local router
 client = OpenAI(
   base_url="http://${currentIp}:8000/v1",
-  api_key="TUTAJ_WKLEJ_SWOJ_KLUCZ_API"
+  api_key="PASTE_YOUR_API_KEY_HERE"
 )
 
 completion = client.chat.completions.create(
-  model="NAZWA_MODELU_Z_ZAKLADKI_MODELE",
+  model="MODEL_NAME_FROM_MODELS_TAB",
   messages=[
-    {"role": "user", "content": "Witaj, powiedz mi coś ciekawego."}
+    {"role": "user", "content": "Hello, tell me something interesting."}
   ]
 )
 
@@ -460,18 +510,17 @@ async function fetchKeyDetails() {
             if (logsData.length > 0) {
                 const reversedLogs = [...logsData].reverse();
                 logsTbody.innerHTML = reversedLogs.map(log => {
-                    const date = new Date(log.timestamp * 1000);
-                    const timeStr = date.toLocaleTimeString('pl-PL');
                     return `
                         <tr>
-                            <td>${timeStr}</td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span style="color: var(--accent); font-family: monospace;">${log.model}</span>
-                                    <button onclick="copyToClipboard('${log.model}')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 2px;" title=t('js_copy_id')>📋</button>
+                            <td>${new Date(log.timestamp * 1000).toLocaleString('en-US')}</td>
+                            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                    <span title="${log.model}">${log.model}</span>
+                                    <button onclick="copyToClipboard('${log.model}')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 2px;" title="Copy Model ID"><i class="ph ph-copy"></i></button>
                                 </div>
                             </td>
                             <td>${log.elapsed_seconds}</td>
+                            <td>${log.ttft !== undefined ? log.ttft : '0.00'}</td>
                             <td>${log.total_tokens}</td>
                             <td style="color: var(--success);">
                                 <strong>${log.tokens_per_second}</strong>
@@ -483,13 +532,137 @@ async function fetchKeyDetails() {
                     `;
                 }).join('');
             } else {
-                logsTbody.innerHTML = `<tr><td colspan="5" style="color: #888; text-align: center;">Brak zapytań dla tego klucza</td></tr>`;
+                logsTbody.innerHTML = `<tr><td colspan="6" style="color: #888; text-align: center;">No requests for this key</td></tr>`;
             }
         }
     } catch (e) {
         console.error(e);
     }
 }
+
+// --- SETTINGS LOGIC ---
+
+async function fetchSlotSettings() {
+    try {
+        const res = await fetch(`${API_BASE}/api/settings/slots`);
+        if (!res.ok) return;
+        const slots = await res.json();
+        const container = document.getElementById("slots-container");
+        if (!container) return;
+
+        const deviceOptions = `
+            <option value="cpu">CPU</option>
+            <option value="cuda">CUDA</option>
+            <option value="vulkan">Vulkan</option>
+        `;
+
+        container.innerHTML = Object.entries(slots).map(([idx, slot]) => {
+            const slotNum = parseInt(idx);
+            return `
+                <div class="slot-card" data-slot="${slotNum}">
+                    <div class="slot-header">
+                        <span class="slot-label">${t('settings_slot_label')} ${slotNum}</span>
+                        ${slot.loaded_model ? `<span class="slot-loaded-badge"><i class="ph ph-check-circle"></i> ${slot.loaded_model}</span>` : `<span class="slot-free-badge"><i class="ph ph-hard-drive"></i> Free</span>`}
+                    </div>
+                    <div class="slot-device-row">
+                        <label>${t('settings_device_label')}:</label>
+                        <select class="slot-device-select" data-slot="${slotNum}">
+                            ${['cpu', 'cuda', 'vulkan'].map(d =>
+                                `<option value="${d}" ${slot.device === d ? 'selected' : ''}>${d.toUpperCase()}</option>`
+                            ).join('')}
+                        </select>
+                        <button class="slot-save-btn" onclick="updateSlot(${slotNum})">${t('settings_save_btn')}</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error("Error fetching slot settings:", e);
+    }
+}
+
+async function updateSlot(slotIndex) {
+    const select = document.querySelector(`.slot-device-select[data-slot="${slotIndex}"]`);
+    if (!select) return;
+    const device = select.value;
+    try {
+        const res = await fetch(`${API_BASE}/api/settings/slots`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({slot_index: slotIndex, device: device})
+        });
+        if (res.ok) {
+            showNotification(t('settings_saved'));
+            fetchSlotSettings();
+        }
+    } catch (e) {
+        console.error("Error updating slot:", e);
+    }
+}
+
+function showNotification(msg) {
+    const notify = document.createElement('div');
+    notify.textContent = msg;
+    notify.style.cssText = "position:fixed;bottom:20px;right:20px;background:var(--success);color:white;padding:10px 20px;border-radius:4px;z-index:9999;animation:fadeInUp 0.3s ease;";
+    document.body.appendChild(notify);
+    setTimeout(() => notify.remove(), 2000);
+}
+
+// --- LOADED MODELS STATUS ---
+
+async function fetchLoadedModels() {
+    try {
+        const res = await fetch(`${API_BASE}/api/status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const container = document.getElementById("loaded-models-container");
+        if (!container) return;
+
+        const models = data.loaded_models || {};
+        const entries = Object.entries(models);
+
+        if (entries.length === 0) {
+            container.innerHTML = `<p style="color: var(--text-secondary);">${t('settings_no_models')}</p>`;
+            return;
+        }
+
+        container.innerHTML = entries.map(([name, info]) => {
+            return `
+                <div class="loaded-model-row">
+                    <div class="loaded-model-name"><i class="ph ph-cube"></i> ${name}</div>
+                    <div class="loaded-model-details">
+                        <span><i class="ph ph-cpu"></i> ${t('settings_loaded_in')} ${info.slot} (${info.engine.toUpperCase()})</span>
+                        <span><i class="ph ph-activity"></i> ${t('settings_refcount')}: ${info.refcount}</span>
+                        <span><i class="ph ph-text-align-left"></i> ${t('settings_n_ctx')}: ${info.n_ctx}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error("Error fetching loaded models:", e);
+    }
+}
+
+// Patch fetchData to also update settings
+const origFetchData = fetchData;
+fetchData = async function() {
+    await origFetchData();
+    if (document.getElementById("settings-tab").classList.contains('active')) {
+        fetchSlotSettings();
+        fetchLoadedModels();
+    }
+};
+
+// Also fetch when switching to settings tab
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+        const tabId = item.getAttribute('data-tab');
+        if (tabId === 'settings-tab') {
+            fetchSlotSettings();
+            fetchLoadedModels();
+        }
+    });
+});
 
 // Inicjalizacja
 initChart();

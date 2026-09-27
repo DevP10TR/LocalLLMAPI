@@ -1,0 +1,1 @@
+{"id":"chatcmpl-1783859102","object":"chat.completion","created":1783859102,"model":"gemma-4-E4B-it-Q4_0.gguf","choices":[{"index":0,"message":{"role":"assistant","content":"Hi! How can I help you today? 😊"},"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":10,"total_tokens":17}}

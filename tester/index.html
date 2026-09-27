@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Tester</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-color: #f8fafc;
+            --border-color: #334155;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --user-msg: #3b82f6;
+            --bot-msg: #334155;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        .header {
+            display: flex;
+            gap: 15px;
+            padding: 15px;
+            background: var(--panel-bg);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            border: 1px solid var(--border-color);
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex: 1;
+            min-width: 200px;
+        }
+        label {
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+        input, select, button {
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: #0f172a;
+            color: white;
+            font-size: 0.95rem;
+        }
+        button {
+            background: var(--accent);
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: var(--accent-hover);
+        }
+        button:disabled {
+            background: #475569;
+            cursor: not-allowed;
+        }
+        .chat-container {
+            flex: 1;
+            background: var(--panel-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        .message.user {
+            background: var(--user-msg);
+            align-self: flex-end;
+            border-bottom-right-radius: 0;
+        }
+        .message.bot {
+            background: var(--bot-msg);
+            align-self: flex-start;
+            border-bottom-left-radius: 0;
+        }
+        .message pre {
+            background: #0f172a;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+        textarea {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--panel-bg);
+            color: white;
+            font-size: 1rem;
+            resize: none;
+            font-family: inherit;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="input-group">
+            <label>API Base URL</label>
+            <input type="text" id="api-url" value="http://127.0.0.1:8000/v1">
+        </div>
+        <div class="input-group">
+            <label>API Key</label>
+            <input type="password" id="api-key" placeholder="Enter API Key...">
+        </div>
+        <div class="input-group" style="flex: 0; justify-content: flex-end;">
+            <button onclick="fetchModels()" id="btn-fetch">Load Models</button>
+        </div>
+        <div class="input-group">
+            <label>Select Model</label>
+            <select id="model-select">
+                <option value="">-- Load models first --</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="chat-container" id="chat">
+        <div class="message bot">Witaj! Wpisz swój klucz API, załaduj modele i wyślij wiadomość, aby przetestować API.</div>
+    </div>
+
+    <div class="input-area">
+        <textarea id="prompt" rows="3" placeholder="Type your message here..."></textarea>
+        <button id="btn-send" onclick="sendMessage()" style="padding: 0 30px;">Send</button>
+    </div>
+
+    <script>
+        let chatHistory = [];
+
+        async function fetchModels() {
+            const url = document.getElementById('api-url').value.replace(/\/$/, '');
+            const key = document.getElementById('api-key').value;
+            const btn = document.getElementById('btn-fetch');
+            const select = document.getElementById('model-select');
+
+            if(!key) {
+                alert("Please enter an API Key!");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = "Loading...";
+
+            try {
+                const res = await fetch(`${url}/models`, {
+                    headers: { 'Authorization': `Bearer ${key}` }
+                });
+                
+                if(!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                
+                const data = await res.json();
+                select.innerHTML = '';
+                
+                if(data.data && data.data.length > 0) {
+                    data.data.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m.id;
+                        opt.textContent = m.id;
+                        select.appendChild(opt);
+                    });
+                } else {
+                    select.innerHTML = '<option value="">No models found</option>';
+                }
+            } catch (e) {
+                alert("Error fetching models: " + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Load Models";
+            }
+        }
+
+        function appendMessage(role, content) {
+            const chat = document.getElementById('chat');
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+            
+            // Basic formatting for code blocks and line breaks
+            let formatted = content
+                .replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                .replace(/\n/g, '<br>');
+
+            div.innerHTML = formatted;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const url = document.getElementById('api-url').value.replace(/\/$/, '');
+            const key = document.getElementById('api-key').value;
+            const model = document.getElementById('model-select').value;
+            const promptInput = document.getElementById('prompt');
+            const btn = document.getElementById('btn-send');
+            const content = promptInput.value.trim();
+
+            if(!content || !key || !model) {
+                alert("Please ensure API Key, Model, and Message are provided.");
+                return;
+            }
+
+            // Append user message
+            appendMessage('user', content);
+            chatHistory.push({ role: "user", content: content });
+            promptInput.value = '';
+            
+            btn.disabled = true;
+            btn.textContent = "Thinking...";
+
+            try {
+                const res = await fetch(`${url}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${key}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: chatHistory,
+                        stream: false
+                    })
+                });
+
+                const data = await res.json();
+                
+                if(!res.ok) {
+                    throw new Error(data.detail || data.error?.message || `HTTP ${res.status}`);
+                }
+
+                const reply = data.choices[0].message.content;
+                chatHistory.push({ role: "assistant", content: reply });
+                appendMessage('bot', reply);
+
+            } catch (e) {
+                appendMessage('bot', `<span style="color: #ef4444;">Error: ${e.message}</span>`);
+                chatHistory.pop(); // Remove the last user message from history on error
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Send";
+            }
+        }
+
+        // Allow Enter to send (Shift+Enter for new line)
+        document.getElementById('prompt').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
