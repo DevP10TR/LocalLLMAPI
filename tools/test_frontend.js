@@ -123,6 +123,11 @@ const sandbox = {
   Chart: function () { return { data: { datasets: [{ data: [] }] }, options: { scales: {} }, update() {} }; },
 };
 sandbox.window = sandbox;   // w przegladarce window === globalThis
+// window === globalThis, wiec addEventListener musi byc na sandboxie,
+// a nie tylko na obiekcie document.
+sandbox.addEventListener = (ev, fn) => { (listeners[`win:${ev}`] ||= []).push(fn); };
+sandbox.removeEventListener = () => {};
+sandbox.innerWidth = 1440;
 sandbox.globalThis = sandbox;
 
 try {

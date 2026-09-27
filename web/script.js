@@ -178,7 +178,6 @@ function showTab(name, push = true) {
   $s('page-title').textContent = label ? label.textContent : '';
   $s('page-sub').textContent = t(`sub_${name}`) || '';
 
-  document.body.classList.remove('nav-open');
   $s('scroll').scrollTop = 0;
   stagger(panel);
   if (push && location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
@@ -195,9 +194,10 @@ document.addEventListener('click', (e) => {
   if (goto) showTab(goto.dataset.goto);
 });
 
-const isMobile = () => window.matchMedia('(max-width: 820px)').matches;
-
-/* ---------- zwijanie paska (rail) ---------- */
+/* ---------- zwijanie paska ----------
+   Jedna mechanika, dwa stany: rozwiniety (232px) i zwiniety do ikon (52px).
+   Bez drawera i bez slajdu — pasek jest zawsze na miejscu, a przelacza go
+   klik w logo. Dzieki temu logo musi zawsze byc dostepne. */
 const NAV_KEY = 'llmapi.rail';
 
 const resizeChart = () => requestAnimationFrame(() => usageChart?.resize?.());
@@ -206,33 +206,22 @@ function applyRail(collapsed, persist = true) {
   $('.app').classList.toggle('is-rail', collapsed);
   const btn = $('#nav-toggle');
   btn.setAttribute('aria-expanded', String(!collapsed));
-  btn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  btn.setAttribute('aria-label', collapsed ? t('nav_expand') : t('nav_collapse'));
   if (persist) {
     try { localStorage.setItem(NAV_KEY, collapsed ? '1' : '0'); } catch { /* prywatny tryb */ }
   }
   resizeChart();
 }
 
-/* Jeden przycisk, dwa zachowania: na desktopie zwija do ikon,
-   na telefonie zamyka drawer. */
 function toggleNav() {
-  if (isMobile()) { document.body.classList.remove('nav-open'); return; }
   applyRail(!$('.app').classList.contains('is-rail'));
 }
 
 $('#nav-toggle').addEventListener('click', toggleNav);
-$('#sidebar-open').addEventListener('click', () => document.body.classList.add('nav-open'));
-$('#scrim').addEventListener('click', () => document.body.classList.remove('nav-open'));
 
-/* Po powrocie do szerokiego okna drawer musi zniknac — inaczej zostalby
-   otwarty i zaslanial tresc. */
-const wideQuery = window.matchMedia('(min-width: 821px)');
-const onBreakpoint = (e) => {
-  if (e.matches) document.body.classList.remove('nav-open');
-  resizeChart();
-};
-if (wideQuery.addEventListener) wideQuery.addEventListener('change', onBreakpoint);
-else wideQuery.addListener(onBreakpoint);
+/* Wykres musi dostac resize() po zmianie szerokosci, inaczej zostalby
+   rozciagniety na stara szerokosc canvasu. */
+window.addEventListener('resize', resizeChart);
 
 /* ---------- motyw ---------- */
 const THEME_KEY = 'llmapi.theme';
@@ -278,8 +267,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape') {
     const open = $$('.modal:not([hidden])').pop();
-    if (open) { closeModal(open.id); return; }
-    if (document.body.classList.contains('nav-open')) document.body.classList.remove('nav-open');
+    if (open) closeModal(open.id);
     return;
   }
   if (e.key !== 'Tab') return;

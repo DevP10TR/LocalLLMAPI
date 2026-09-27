@@ -17,15 +17,15 @@
   <!-- ============ SIDEBAR ============ -->
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <div class="brand-mark"><i class="ti ti-terminal-2"></i></div>
+      <!-- Logo jest jedynym przelacznikiem paska: klik rozwija / zwija. -->
+      <button class="brand-mark" id="nav-toggle" aria-label="Toggle sidebar"
+              aria-expanded="true" aria-controls="nav" data-tip="nav_expand">
+        <i class="ti ti-terminal-2"></i>
+      </button>
       <div class="brand-text">
         <strong>LocalLLMAPI</strong>
         <small data-i18n="brand_tagline">Local inference router</small>
       </div>
-      <button class="icon-btn nav-toggle" id="nav-toggle" aria-label="Collapse sidebar"
-              aria-expanded="true" aria-controls="nav" data-tip="Collapse sidebar">
-        <i class="ti ti-chevron-left" id="nav-toggle-icon"></i>
-      </button>
     </div>
 
     <nav class="nav" id="nav">
@@ -69,14 +69,9 @@
     </div>
   </aside>
 
-  <div class="scrim" id="scrim"></div>
-
   <!-- ============ MAIN ============ -->
   <main class="main">
     <header class="topbar">
-      <button class="icon-btn only-mobile" id="sidebar-open" aria-label="Open menu">
-        <i class="ti ti-menu-2"></i>
-      </button>
       <div class="topbar-title">
         <h1 id="page-title">Home</h1>
         <p id="page-sub"></p>
@@ -96,7 +91,7 @@
       <!-- ---------- HOME ---------- -->
       <section class="panel is-active" id="home">
         <div class="app-head">
-          <div class="brand-mark"><i class="ti ti-terminal-2"></i></div>
+          <div class="brand-mark brand-mark-lg"><i class="ti ti-terminal-2"></i></div>
           <div>
             <h2>LocalLLMAPI</h2>
             <p data-i18n="home_headline">OpenAI-compatible router running entirely on this machine.</p>

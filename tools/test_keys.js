@@ -421,15 +421,8 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
   check('TOPBAR: przycisk odswiezania robi requesty', calls.length > statusBefore,
     `przed=${statusBefore} po=${calls.length}`);
 
-  // SIDEBAR (mobile)
-  const sidebarBtn = $('#sidebar-open');
-  sidebarBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await sleep(200);
-  check('SIDEBAR: przycisk otwiera menu', doc.body.classList.contains('nav-open'));
-  $('#scrim').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await sleep(200);
-  check('SIDEBAR: klik w tlo zamyka menu', !doc.body.classList.contains('nav-open'));
-
+  // Drawer mobilny zostal usuniety — pasek jest zawsze na miejscu.
+  console.log('\n[15] Zwijanie paska do ikon');
   // ESC zamyka modal
   const e0 = $('#keys-list .row-acts .icon-btn');
   $('.nav-item[data-tab="keys"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
@@ -443,15 +436,24 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
   check('body overflow przywrocone po ESC', doc.body.style.overflow === '',
     `"${doc.body.style.overflow}"`);
 
-  // ZWIJANIE PASKA (rail) - desktop
-  console.log('\n[15] Zwijanie paska do ikon');
+  // ZWIJANIE PASKA (rail)
   const app = $('.app');
   const railBtn = $('#nav-toggle');
   const cs = (s) => window.getComputedStyle($(s));
 
-  check('toggle widoczny na desktopie', cs('#nav-toggle').display !== 'none',
-    `display=${cs('#nav-toggle').display}`);
-  check('pasek startuje rozwiniety', !app.classList.contains('is-rail'));
+  // Nie ma hamburgera ani drawera — wszystko jedna mechanika na logo.
+  check('brak hamburgera w topbarze', $('#sidebar-open') === null);
+  check('brak drawera (scrim)', $('#scrim') === null);
+  check('brak klasy nav-open na body', !doc.body.classList.contains('nav-open'));
+  check('brak slajdu w CSS', !/translateX\(-102%\)|nav-open/.test(read('web/style.css')));
+  check('brak .only-mobile w CSS', !/\.only-mobile/.test(read('web/style.css')));
+  check('logo jest przyciskiem', railBtn.tagName === 'BUTTON', railBtn.tagName);
+  check('logo ma aria-controls', railBtn.getAttribute('aria-controls') === 'nav');
+  check('logo ma etykiete aria-label', (railBtn.getAttribute('aria-label') || '').length > 0,
+    railBtn.getAttribute('aria-label'));
+  check('brak osobnego chevrona (to logo jest przelacznikiem)',
+    $('#nav-toggle-icon') === null);
+
   // jsdom nie rozwiązuje var() w grid-template-columns, więc sprawdzamy
   // KTÓRA zmienna jest użyta — to jednoznacznie dowodzi zmiany szerokości.
   const railVar = () => (cs('.app').gridTemplateColumns.match(/--([a-z]+-w)/) || [])[1];
@@ -463,7 +465,7 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
 
   railBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await sleep(300);
-  check('klik zwija pasek do ikon', app.classList.contains('is-rail'));
+  check('KLIK W LOGO zwija pasek do ikon', app.classList.contains('is-rail'));
   check('kolumna zwiezona (grid uzywa --rail-w)', railVar() === 'rail-w',
     cs('.app').gridTemplateColumns);
   check('etykiety nawigacji ukryte',
@@ -473,16 +475,15 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
   check('licznik kluczy ukryty', cs('.nav-badge').display === 'none');
   check('ikony nawigacji NADAL widoczne',
     cs('.nav-item[data-tab="home"] i').display !== 'none');
-  check('logo NADAL widoczne', cs('.brand-mark').display !== 'none');
+  check('logo NADAL widoczne i klikalne', cs('.brand-mark').display !== 'none');
   check('kropka statusu NADAL widoczna', cs('#status-indicator').display !== 'none');
   check('przycisk motywu NADAL widoczny', cs('#theme-toggle').display !== 'none');
-  check('toggle ukryty w railu (brak miejsca)', cs('#nav-toggle').display === 'none');
   check('aria-expanded = false', railBtn.getAttribute('aria-expanded') === 'false',
     railBtn.getAttribute('aria-expanded'));
+  check('aria-label mowi "rozwin"', /rozwin|expand/i.test(railBtn.getAttribute('aria-label')),
+    railBtn.getAttribute('aria-label'));
   check('stan zapisany w localStorage', window.localStorage.getItem('llmapi.rail') === '1',
     window.localStorage.getItem('llmapi.rail'));
-  check('ikona toggle odwrocona', /180deg|matrix\(-1/.test(cs('#nav-toggle-icon').transform),
-    cs('#nav-toggle-icon').transform);
 
   $('.nav-item[data-tab="settings"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await sleep(400);
@@ -499,17 +500,16 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
   check('grid wracal do --sidebar-w', railVar() === 'sidebar-w',
     cs('.app').gridTemplateColumns);
   check('etykiety wracaja', cs('.nav-item[data-tab="home"] span').display !== 'none');
-  check('toggle wraca do widocznosci', cs('#nav-toggle').display !== 'none');
   check('localStorage zresetowany', window.localStorage.getItem('llmapi.rail') === '0',
     window.localStorage.getItem('llmapi.rail'));
 
   railBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await sleep(250);
-  check('drugi klik zwija ponownie', app.classList.contains('is-rail'));
+  check('drugi klik logo zwija ponownie', app.classList.contains('is-rail'));
   railBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await sleep(250);
-  check('trzeci klik rozwija', !app.classList.contains('is-rail'));
-  check('przycisk nigdy nie zostaje martwy', cs('#nav-toggle').display !== 'none');
+  check('trzeci klik logo rozwija', !app.classList.contains('is-rail'));
+  check('logo nigdy nie znika', cs('.brand-mark').display !== 'none');
 
   check('brak bledow JS po wszystkich kliknieciach', consoleErrors.length === 0,
     consoleErrors.slice(0, 3).join(' | '));
