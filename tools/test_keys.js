@@ -511,6 +511,84 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
   check('trzeci klik logo rozwija', !app.classList.contains('is-rail'));
   check('logo nigdy nie znika', cs('.brand-mark').display !== 'none');
 
+  // Tooltipy: tresc i pozycja
+  console.log('\n[16] Tooltipy paska');
+  const tipOf = (sel) => $(sel).dataset.tip;
+  check('tooltip nawigacji to przetlumaczony tekst, nie klucz',
+    tipOf('.nav-item[data-tab="logs"]') === 'API Logs',
+    `"${tipOf('.nav-item[data-tab="logs"]')}"`);
+  check('brak surowych kluczy i18n w HTML dla tooltipow',
+    !/data-tip="[a-z_]+_/.test(read('web/index.html')),
+    (read('web/index.html').match(/data-tip="[^"]*"/g) || []).join(', '));
+  check('brak surowych kluczy i18n w tooltipach',
+    $$('[data-tip]').every((n) => !/^(nav_|js_|stat_|settings_|conn_|ep_|modal_|confirm_|logs_|keys_|models_|time_|th_|tag_|last_hour|slot_|home_)/.test(n.dataset.tip)),
+    $$('[data-tip]').map((n) => n.dataset.tip).join(' | '));
+  check('kazdy element z data-tip ma niepusta tresc',
+    $$('[data-tip]').every((n) => (n.dataset.tip || '').trim().length > 0));
+  check('wszystkie 6 pozycji nawigacji ma tooltip',
+    $$('.nav-item[data-tab]').every((n) => (n.dataset.tip || '').trim().length > 0),
+    `${$$('.nav-item[data-tab]').filter((n) => !n.dataset.tip).length} bez tooltipa`);
+  check('tooltip logo = akcja w danym stanie',
+    tipOf('#nav-toggle') === 'Collapse sidebar', tipOf('#nav-toggle'));
+  check('tooltip kropki statusu nie jest kluczem',
+    tipOf('#conn') !== 'status_text', tipOf('#conn'));
+
+  // Pozycja tooltipa w railu: z prawej, nie nad
+  app.classList.add('is-rail');
+  await sleep(200);
+  const tipStyle = read('web/style.css');
+  // Selektor wystepuje w dwoch regulach (opacity + pozycja) — laczymy obie.
+  const railRules = tipStyle.split('.app.is-rail [data-tip]::after').slice(1)
+    .map((s) => s.split('}')[0]).join(' ');
+  check('tooltip w railu jest z PRAWEJ', /left:\s*calc\(100%/.test(railRules),
+    railRules.replace(/\s+/g, ' ').trim());
+  check('tooltip w railu nie jest nad elementem',
+    /top:\s*50%/.test(railRules) && /bottom:\s*auto/.test(railRules));
+  check('.nav nie ma overflow (nie obcina tooltipow)',
+    !/\.nav\s*\{[^}]*overflow/.test(tipStyle));
+  check('rail nie pokazuje paska aktywnego 2px',
+    /\.app\.is-rail \.nav-item::before\s*\{\s*display:\s*none/.test(tipStyle.replace(/\n\s*/g, ' ')));
+  app.classList.remove('is-rail');
+  await sleep(200);
+
+  // Domyslnie rozwiniety — prawdziwy test: nowa instancja DOM, czysty
+  // localStorage, panel startuje i sprawdzamy faktyczny stan.
+  console.log('\n[17] Stan domyslny po zaladowaniu');
+  const fresh = new JSDOM(read('web/index.html'), {
+    runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost:1000/',
+  });
+  check('swieza sesja: brak zapisanego stanu',
+    fresh.window.localStorage.getItem('llmapi.rail') === null,
+    String(fresh.window.localStorage.getItem('llmapi.rail')));
+  fresh.window.matchMedia = (q) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} });
+  fresh.window.HTMLCanvasElement.prototype.getContext = () => ({
+    fillRect() {}, clearRect() {}, save() {}, restore() {}, beginPath() {}, closePath() {},
+    stroke() {}, fill() {}, translate() {}, scale() {}, measureText: () => ({ width: 10 }),
+    fillText() {}, createLinearGradient: () => ({ addColorStop() {} }), setTransform() {}, rect() {}, clip() {},
+  });
+  fresh.window.Chart = function () {
+    return {
+      data: { labels: [], datasets: [{ data: [] }] },
+      options: { scales: { x: { ticks: {}, grid: {} }, y: { ticks: {}, grid: {} } }, plugins: { tooltip: {} } },
+      update() {},
+    };
+  };
+  fresh.window.fetch = async () => ({ ok: true, status: 200, json: async () => ({}) });
+  fresh.window.navigator.clipboard = { writeText: async () => {} };
+  fresh.window.eval(read('web/i18n.js'));
+  fresh.window.eval(read('web/script.js'));
+  await sleep(400);
+  const freshApp = fresh.window.document.querySelector('.app');
+  const freshTip = fresh.window.document.getElementById('nav-toggle').dataset.tip;
+  check('swieza sesja: pasek jest ROZWINIETY', !freshApp.classList.contains('is-rail'));
+  check('swieza sesja: etykiety widoczne',
+    fresh.window.getComputedStyle(fresh.window.document.querySelector('.nav-item[data-tab="home"] span')).display !== 'none');
+  check('swieza sesja: tooltip logo mowi "Collapse sidebar"', freshTip === 'Collapse sidebar', freshTip);
+  check('swieza sesja: starcie nic nie zapisuje do localStorage',
+    fresh.window.localStorage.getItem('llmapi.rail') === null,
+    String(fresh.window.localStorage.getItem('llmapi.rail')));
+  fresh.window.close();
+
   check('brak bledow JS po wszystkich kliknieciach', consoleErrors.length === 0,
     consoleErrors.slice(0, 3).join(' | '));
 

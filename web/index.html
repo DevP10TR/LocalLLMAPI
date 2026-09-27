@@ -18,8 +18,8 @@
   <aside class="sidebar" id="sidebar">
     <div class="brand">
       <!-- Logo jest jedynym przelacznikiem paska: klik rozwija / zwija. -->
-      <button class="brand-mark" id="nav-toggle" aria-label="Toggle sidebar"
-              aria-expanded="true" aria-controls="nav" data-tip="nav_expand">
+      <button class="brand-mark" id="nav-toggle" aria-label="Collapse sidebar"
+              aria-expanded="true" aria-controls="nav" data-i18n-tip="nav_expand">
         <i class="ti ti-terminal-2"></i>
       </button>
       <div class="brand-text">
@@ -28,41 +28,45 @@
       </div>
     </div>
 
+    <!-- Tooltipy nawigacji sa uzupelniane przez translateUI() z tekstu
+         etykiety — dzieki temu zawsze zgodne z jezykiem, nigdy surowy klucz. -->
     <nav class="nav" id="nav">
-      <a href="#home" class="nav-item is-active" data-tab="home" data-tip="nav_home">
+      <a href="#home" class="nav-item is-active" data-tab="home">
         <i class="ti ti-home-2"></i> <span data-i18n="nav_home">Home</span>
       </a>
-      <a href="#models" class="nav-item" data-tab="models" data-tip="nav_models">
+      <a href="#models" class="nav-item" data-tab="models">
         <i class="ti ti-cpu-2"></i> <span data-i18n="nav_models">Models</span>
       </a>
 
       <span class="nav-label" data-i18n="nav_label_manage">Manage</span>
-      <a href="#keys" class="nav-item" data-tab="keys" data-tip="nav_keys">
+      <a href="#keys" class="nav-item" data-tab="keys">
         <i class="ti ti-key"></i> <span data-i18n="nav_keys">API Keys</span>
         <em class="nav-badge" id="nav-keys-count">0</em>
       </a>
-      <a href="#logs" class="nav-item" data-tab="logs" data-tip="nav_logs">
+      <a href="#logs" class="nav-item" data-tab="logs">
         <i class="ti ti-chart-bar"></i> <span data-i18n="nav_logs">API Logs</span>
       </a>
 
       <span class="nav-label" data-i18n="nav_label_system">System</span>
-      <a href="#connect" class="nav-item" data-tab="connect" data-tip="nav_connect">
+      <a href="#connect" class="nav-item" data-tab="connect">
         <i class="ti ti-plug"></i> <span data-i18n="nav_connect">Connection</span>
       </a>
-      <a href="#settings" class="nav-item" data-tab="settings" data-tip="nav_settings">
+      <a href="#settings" class="nav-item" data-tab="settings">
         <i class="ti ti-settings"></i> <span data-i18n="nav_settings">Settings</span>
       </a>
     </nav>
 
     <div class="sidebar-foot">
-      <div class="conn" id="conn" data-tip="status_text">
+      <!-- Tooltipy ponizej ustawia JS (applyTheme / setStatus), bo ich tresc
+           zalezy od stanu, a nie od jezyka. -->
+      <div class="conn" id="conn">
         <span class="conn-dot" id="status-indicator"></span>
         <div class="conn-text">
           <strong id="status-text" data-i18n="status_connecting">Connecting…</strong>
           <small id="status-sub">—</small>
         </div>
       </div>
-      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" data-tip="theme_label">
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
         <i class="ti ti-sun" id="theme-icon"></i>
         <span id="theme-label">Light</span>
       </button>

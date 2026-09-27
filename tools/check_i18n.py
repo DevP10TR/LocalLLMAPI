@@ -24,10 +24,17 @@ for i, (lang, pos) in enumerate(positions[:-1]):
     body = dicts[pos : positions[i + 1][1]]
     blocks[lang] = dict(re.findall(r"^    (\w+): (.*)$", body, re.M))
 
-used = set(re.findall(r'data-i18n(?:-placeholder)?="([^"]+)"', html))
+used = set(re.findall(r'data-i18n(?:-placeholder|-tip)?="([^"]+)"', html))
 used |= set(re.findall(r"\bt\('([a-z0-9_]+)'", js))
-# Klucze skladane dynamicznie: t(`sub_${name}`) — trzeba je wyliczyc explicite.
-used |= {f"sub_{n}" for n in ("home", "models", "keys", "logs", "connect", "settings")}
+# Klucze skladane dynamicznie — regex ich nie widzi, wiec sa wypisane:
+#   t(`sub_${name}`) w showTab()
+#   t(collapsed ? 'nav_expand' : 'nav_collapse') w applyRail()
+DYNAMIC = {
+    *(f"sub_{n}" for n in ("home", "models", "keys", "logs", "connect", "settings")),
+    "nav_expand",
+    "nav_collapse",
+}
+used |= DYNAMIC
 
 errors = []
 langs = sorted(blocks)

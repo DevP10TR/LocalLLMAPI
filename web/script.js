@@ -203,10 +203,19 @@ const NAV_KEY = 'llmapi.rail';
 const resizeChart = () => requestAnimationFrame(() => usageChart?.resize?.());
 
 function applyRail(collapsed, persist = true) {
+  if (collapsed === undefined) {
+    collapsed = $('.app').classList.contains('is-rail');
+    persist = false;
+  }
   $('.app').classList.toggle('is-rail', collapsed);
   const btn = $('#nav-toggle');
   btn.setAttribute('aria-expanded', String(!collapsed));
-  btn.setAttribute('aria-label', collapsed ? t('nav_expand') : t('nav_collapse'));
+  // Klucz tooltipu zalezy od stanu, wiec trzymamy go w data-i18n-tip —
+  // wtedy zmiana jezyka w translateUI() nadal da poprawny tekst.
+  const key = collapsed ? 'nav_expand' : 'nav_collapse';
+  btn.dataset.i18nTip = key;
+  btn.dataset.tip = t(key);
+  btn.setAttribute('aria-label', t(key));
   if (persist) {
     try { localStorage.setItem(NAV_KEY, collapsed ? '1' : '0'); } catch { /* prywatny tryb */ }
   }
@@ -229,7 +238,9 @@ function applyTheme(mode) {
   document.documentElement.dataset.theme = mode;
   const dark = mode === 'dark';
   $s('theme-icon').className = `ti ti-${dark ? 'sun' : 'moon'}`;
-  $s('theme-label').textContent = dark ? 'Light' : 'Dark';
+  const label = dark ? 'Light' : 'Dark';
+  $s('theme-label').textContent = label;
+  $s('theme-toggle').dataset.tip = label;   // tooltip pokazuje akcje, nie stan
   localStorage.setItem(THEME_KEY, mode);
   if (usageChart) applyChartTheme();
 }
@@ -369,8 +380,19 @@ function hideSkeleton() {
 
 async function loadStats() {
   try {
-    const d = await api('/api/stats');
-    if (!d) return;                    // odpowiedz pusta — nie ruszamy UI
+    const raw = await api('/api/stats');
+    if (!raw || typeof raw !== 'object') return;
+    // Niepełna odpowiedz nie może wywrócić strony głównej — brakujące
+    // pola dostają wartości domyślne zamiast rzucać wyjątkiem w UI.
+    const d = {
+      loaded_models: [], recent: [], last: null,
+      total_tokens: 0, total_requests: 0, avg_tps: 0, best_tps: 0,
+      models_on_disk: 0, slots_total: 3, uptime: 0, port: PORT,
+      local_ip: '127.0.0.1', requests_1h: 0, tokens_1h: 0,
+      ...raw,
+    };
+    if (!Array.isArray(d.loaded_models)) d.loaded_models = [];
+    if (!Array.isArray(d.recent)) d.recent = [];
     const last = d.last;
 
     const lm = $s('s-last-model');
@@ -923,6 +945,7 @@ let refreshing = false;
 function setStatus(isOnline, sub) {
   $s('status-indicator').classList.toggle('is-online', isOnline);
   $s('status-text').textContent = isOnline ? t('js_online') : t('js_offline');
+  $s('conn').dataset.tip = isOnline ? t('js_online') : t('js_offline');
   if (sub !== undefined) $s('status-sub').textContent = sub;
   if (online === isOnline) return;
   online = isOnline;
@@ -1050,6 +1073,6 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 else start();
 
 /* i18n.js potrzebuje tych, żeby przerysować dane po zmianie języka. */
-window.LLMAPI = { toast, showTab, loadStats, renderCode, renderEndpoints, renderKeys };
+window.LLMAPI = { toast, showTab, loadStats, renderCode, renderEndpoints, renderKeys, applyRail };
 
 })();

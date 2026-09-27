@@ -363,6 +363,19 @@ function translateUI() {
     if (value !== undefined) node.placeholder = value;
   });
 
+  /* Tooltipy w pasku. Bez tego pokazywaly surowy klucz ("nav_logs")
+     zamiast "API Logs" — atrybut data-tip nie jest tlumaczony przez
+     przebieg [data-i18n]. */
+  document.querySelectorAll('.nav-item').forEach((item) => {
+    const label = item.querySelector('span[data-i18n]');
+    const text = label ? label.textContent.trim() : '';
+    if (text) item.dataset.tip = text;
+  });
+  document.querySelectorAll('[data-i18n-tip]').forEach((node) => {
+    const value = DICT[lang]?.[node.dataset.i18nTip];
+    if (value !== undefined) node.dataset.tip = value;
+  });
+
   document.querySelectorAll('.lang-btn').forEach((b) => {
     b.classList.toggle('is-active', b.dataset.lang === lang);
   });
@@ -376,6 +389,9 @@ function setLanguage(next) {
   // Etykiety sa generowane w JS, wiec trzeba przerysowac dane.
   const api = window.LLMAPI;
   if (!api) return;
+  // applyRail() przepisuje tooltip logo — jego tresc zalezy od stanu paska,
+  // wiec musi sie odnowic po zmianie jezyka, inaczej pokazywalby stara.
+  api.applyRail();
   api.showTab(document.querySelector('.panel.is-active')?.id || 'home', false);
   api.renderCode();
   api.renderEndpoints();
