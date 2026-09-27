@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalLLMAPI — icon candidates</title>
+<style>
+  :root { --bg:#0b0b0d; --card:#141417; --line:#26262c; --t:#ededf0; --t2:#9c9ca6; --t3:#6b6b76; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font:14px/1.5 'Inter',system-ui,sans-serif; background:var(--bg); color:var(--t); padding:40px 28px 72px; }
+  h1 { font-size:19px; font-weight:600; letter-spacing:-.02em; }
+  .lead { color:var(--t2); margin-top:6px; max-width:62ch; }
+  .note { margin-top:8px; color:var(--t3); font-size:13px; max-width:70ch; }
+  h2 { font-size:13px; font-weight:600; color:var(--t2); margin:34px 0 12px; letter-spacing:.01em; }
+  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:9px; padding:16px; }
+  .top { display:flex; align-items:flex-start; gap:13px; }
+  .info h3 { font-size:14px; font-weight:600; }
+  .info p { color:var(--t2); font-size:12.5px; margin-top:3px; }
+  .tag { display:inline-block; margin-top:7px; font-size:10.5px; font-weight:600; letter-spacing:.04em;
+         text-transform:uppercase; color:var(--t3); border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
+  .tag.live { color:#a5f3c4; border-color:#1f4d38; background:#0f2a1e; }
+  .sizes { display:flex; align-items:flex-end; gap:16px; margin-top:16px;
+           padding-top:14px; border-top:1px solid var(--line); flex-wrap:wrap; }
+  .sz { text-align:center; }
+  .sz span { display:block; margin-top:6px; font-size:10px; color:var(--t3); }
+  .dark, .light { display:flex; align-items:center; justify-content:center; border-radius:7px; }
+  .dark { background:#0b0b0d; } .light { background:#fff; }
+  .fav { margin-top:14px; padding-top:12px; border-top:1px solid var(--line);
+         font-family:ui-monospace,Consolas,monospace; font-size:11.5px; color:var(--t2); word-break:break-all; }
+  code { color:#a5b4fc; }
+</style>
+</head>
+<body>
+
+<h1>LocalLLMAPI — app icon candidates</h1>
+<p class="lead">Six directions, all drawn on a 32&times;32 grid with a 2.2&nbsp;px stroke so they stay crisp at 16&nbsp;px.
+Each one is checked at the sizes that actually matter: 16&nbsp;px (tab), 32&nbsp;px (sidebar), 180&nbsp;px (Windows taskbar) and on both backgrounds.</p>
+<p class="note">The current one is marked <em>LIVE</em>. To switch, replace <code>web/branding/icon.svg</code>.</p>
+
+<div class="grid" id="grid"></div>
+
+<script>
+const CANDIDATES = [
+  {
+    id: 'A',
+    name: 'Terminal prompt',
+    desc: 'The `>_` from Tabler terminal-2, isolated. Reads as "developer tool" instantly.',
+    tag: 'current',
+    svg: (bg, fg) => `<rect width="32" height="32" rx="7" fill="${bg}"/><g fill="none" stroke="${fg}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11.5 14 16l-4 4.5"/><path d="M17 20.5h5"/></g>`,
+  },
+  {
+    id: 'B',
+    name: 'Prompt + baseline',
+    desc: 'Prompt with a solid underscore — one heavier element, so it holds up better at 16 px.',
+    tag: 'sharpest at 16px',
+    svg: (bg, fg) => `<rect width="32" height="32" rx="7" fill="${bg}"/><g fill="none" stroke="${fg}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 11 13.5 15.5 9.5 20"/></g><rect x="17" y="18.6" width="5.5" height="2.2" rx="1.1" fill="${fg}"/>`,
+  },
+  {
+    id: 'C',
+    name: 'Chip',
+    desc: 'A processor die. Says "local inference" rather than "terminal", and avoids every terminal cliché.',
+    tag: 'most distinctive',
+    svg: (bg, fg) => `<rect width="32" height="32" rx="7" fill="${bg}"/><g fill="none" stroke="${fg}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="10" width="12" height="12" rx="2.5"/><path d="M13 7v3M19 7v3M13 22v3M19 22v3M7 13h3M7 19h3M22 13h3M22 19h3"/></g>`,
+  },
+  {
+    id: 'D',
+    name: 'Stack',
+    desc: 'Three layers with a lit top one — the 3 model slots, and "model manager" at a glance.',
+    tag: 'best metaphor',
+    svg: (bg, fg) => `<rect width="32" height="32" rx="7" fill="${bg}"/><g fill="none" stroke="${fg}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8.5 25 13l-9 4.5L7 13z"/><path d="m9.5 17 6.5 3.2 6.5-3.2"/><path d="m9.5 20.8 6.5 3.2 6.5-3.2"/></g>`,
+  },
+  {
+    id: 'E',
+    name: 'Monogram',
+    desc: 'A squared "L" built from two strokes. Quietest option — the name carries it, not the glyph.',
+    tag: 'most restrained',
+    svg: (bg, fg) => `<rect width="32" height="32" rx="7" fill="${bg}"/><g fill="none" stroke="${fg}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 8.5v15h7.5"/></g>`,
+  },
+  {
+    id: 'F',
+    name: 'Bolt in a frame',
+    desc: 'GPU acceleration, boxed. Reads "fast" but leans into the generic-AI look — included for comparison.',
+    tag: 'avoid — generic',
+    svg: (bg, fg) => `<rect width="32" height="32" rx="7" fill="${bg}"/><g fill="none" stroke="${fg}" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="7.5" y="9" width="17" height="14" rx="2.5"/><path d="M17 12l-3.5 4.5h3L15 20l4-5h-3l1-3z" fill="${fg}" stroke="none"/></g>`,
+  },
+];
+
+const INDIGO = '#6366f1';
+const grid = document.getElementById('grid');
+
+grid.innerHTML = CANDIDATES.map((c) => {
+  const d = c.svg(INDIGO, '#ffffff');
+  const l = c.svg(INDIGO, '#ffffff');
+  const darkTile = c.svg('#18181b', '#ededf0');
+  return `
+  <div class="card">
+    <div class="top">
+      <div class="sz" style="flex:none">${img(d, 40)}</div>
+      <div class="info">
+        <h3>${c.id} — ${c.name}</h3>
+        <p>${c.desc}</p>
+        <span class="tag ${c.tag === 'current' ? 'live' : ''}">${c.tag}</span>
+      </div>
+    </div>
+    <div class="sizes">
+      ${tile(d, 16, '16')}
+      ${tile(d, 32, '32')}
+      ${tile(d, 180, '180')}
+      <div class="sz">
+        <div class="light" style="width:56px;height:56px">${img(l, 32)}</div>
+        <span>on white</span>
+      </div>
+      <div class="sz">
+        <div class="dark" style="width:56px;height:56px">${img(darkTile, 32)}</div>
+        <span>on dark</span>
+      </div>
+    </div>
+    <div class="fav">web/branding/icon.svg &nbsp;·&nbsp; variant <code>${c.id}</code></div>
+  </div>`;
+}).join('');
+
+function img(svg, size) {
+  return `<img src="data:image/svg+xml,${encodeURIComponent(svg)}" width="${size}" height="${size}" style="display:block;border-radius:${size > 60 ? 14 : size * 0.22}px">`;
+}
+function tile(svg, size, label) {
+  return `<div class="sz"><div class="dark" style="width:${Math.max(size + 24, 56)}px;height:${Math.max(size + 24, 56)}px">${img(svg, size)}</div><span>${label}</span></div>`;
+}
+</script>
+</body>
+</html>

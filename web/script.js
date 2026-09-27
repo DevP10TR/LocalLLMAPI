@@ -1,7 +1,7 @@
 /* ==========================================================================
    LocalLLMAPI — panel
-   Bez zależności od zewnętrznego origin (wszystko same-origin), bez innerHTML
-   na danych użytkownika (bez XSS), z adaptacyjnym pollingiem.
+   Same-origin API (bez CORS, działa też z LAN), brak innerHTML na danych
+   użytkownika, polling adaptacyjny.
    ========================================================================== */
 (() => {
 'use strict';
@@ -10,15 +10,12 @@ const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const PORT = 1000;
 
-/* i18n.js wystawia window.t. Rozwiązujemy go leniwie przy wywołaniu, żeby
-   kolejność wczytywania skryptów nie miała znaczenia. */
+/* i18n.js wystawia window.t. Rozwiązujemy leniwie, więc kolejność
+   wczytywania skryptów nie ma znaczenia. */
 const t = (key, vars) => (window.t ? window.t(key, vars) : key);
 
-/* ---------- pomocnicze ---------- */
-
-/** Buduje element zamiast wstawiać HTML — dane użytkownika nigdy nie parsujemy.
- *  Helper celowo NIE ma trybu `html:`: dostep do innerHTML zostawiamy tylko
- *  dla statycznych ikon. */
+/** Buduje DOM zamiast sklejać HTML — dane użytkownika nigdy nie są parsowane.
+ *  Celowo brak trybu `html:` — dostęp do innerHTML zostaje tylko dla ikon. */
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -31,46 +28,43 @@ function el(tag, attrs = {}, ...children) {
   }
   for (const c of children.flat()) {
     if (c === null || c === undefined || c === false) continue;
-    // nodeType zamiast `instanceof Node` — działa też dla węzłów z innego kontekstu
     node.append(c && c.nodeType ? c : document.createTextNode(String(c)));
   }
   return node;
 }
 
-const icon = (name, cls = '') => el('i', { class: `ti ti-${name}${cls ? ' ' + cls : ''}` });
+const icon = (name) => el('i', { class: `ti ti-${name}` });
+const $s = (id) => document.getElementById(id);
 
-const nf = new Intl.NumberFormat('pl-PL');
+/* ---------- formatowanie ---------- */
+const nf = new Intl.NumberFormat('en-US');
 const num = (n) => nf.format(Math.round(Number(n) || 0));
 const dec = (n, d = 1) => (Number(n) || 0).toFixed(d);
 
 function ago(ts) {
   if (!ts) return t('time_never');
   const s = Math.max(0, Date.now() / 1000 - ts);
-  if (s < 60) return t('time_now');
-  if (s < 3600) return `${Math.floor(s / 60)} ${t('time_min')}`;
-  if (s < 86400) return `${Math.floor(s / 3600)} ${t('time_h')}`;
-  return `${Math.floor(s / 86400)} ${t('time_d')}`;
+  if (s < 45) return t('time_now');
+  if (s < 3600) return `${Math.floor(s / 60)}m ${t('time_ago')}`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ${t('time_ago')}`;
+  return `${Math.floor(s / 86400)}d ${t('time_ago')}`;
 }
 
 function uptime(sec) {
   sec = Math.max(0, Math.floor(sec || 0));
-  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600),
-        m = Math.floor((sec % 3600) / 60);
-  if (d) return `${d}${t('time_d')} ${h}${t('time_h')}`;
-  if (h) return `${h}${t('time_h')} ${m}${t('time_min')}`;
-  return `${m}${t('time_min')} ${sec % 60}s`;
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m ${sec % 60}s`;
 }
 
-const bytes = (b) => {
-  if (!b) return '—';
-  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.min(u.length - 1, Math.floor(Math.log(b) / Math.log(1024)));
-  return `${(b / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`;
-};
-
-const fmtDT = (ts) => (ts ? new Date(ts * 1000).toLocaleString('pl-PL', {
-  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+const fmtDT = (ts) => (ts ? new Date(ts * 1000).toLocaleString('en-GB', {
+  day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit',
 }) : '—');
+
+const fmtTime = (ts) => (ts ? new Date(ts * 1000).toLocaleTimeString('en-GB') : '—');
 
 const maskKey = (k) => (!k ? '—' : k.length > 15 ? `${k.slice(0, 10)}…${k.slice(-3)}` : k);
 
@@ -88,8 +82,8 @@ async function api(path, options = {}) {
   return res.status === 204 ? null : res.json();
 }
 
-/* Kopia do schowka z fallbackiem — clipboard API nie działa po http:// (brak
-   secure context), a panel ma działać także po adresie LAN. */
+/* Schowek z fallbackiem — clipboard API nie działa po http:// (brak secure
+   context), a panel ma działać także pod adresem LAN. */
 async function copyText(text) {
   try {
     if (navigator.clipboard && window.isSecureContext) {
@@ -108,51 +102,36 @@ async function copyText(text) {
   } catch { return false; }
 }
 
+const copyAndToast = (text) =>
+  copyText(text).then((ok) => toast(ok ? t('js_copied') : t('js_copy_fail'), ok ? 'ok' : 'err'));
+
 /* ---------- toasty ---------- */
 const TOAST_ICON = { ok: 'circle-check', err: 'alert-circle', info: 'info-circle' };
-function toast(message, kind = 'ok', ms = 3000) {
-  const host = $('#toasts');
-  const node = el('div', { class: `toast ${kind}` }, icon(TOAST_ICON[kind] || 'info-circle'), el('span', { text: message }));
+function toast(message, kind = 'ok', ms = 2800) {
+  const host = $s('toasts');
+  const node = el('div', { class: `toast ${kind}` },
+    icon(TOAST_ICON[kind] || 'info-circle'), el('span', { text: message }));
   host.append(node);
+  let done = false;
   const kill = () => {
+    if (done) return;
+    done = true;
     node.classList.add('is-out');
     node.addEventListener('animationend', () => node.remove(), { once: true });
-    setTimeout(() => node.remove(), 600);
+    setTimeout(() => node.remove(), 400);
   };
   const timer = setTimeout(kill, ms);
   node.addEventListener('click', () => { clearTimeout(timer); kill(); });
-  while (host.children.length > 4) host.firstElementChild.remove();
-  return node;
+  while (host.children.length > 3) host.firstElementChild.remove();
 }
 
-/* ---------- animowany licznik ---------- */
-const counted = new WeakMap();
-function countTo(node, value, { decimals = 0, suffix = '' } = {}) {
-  const target = Number(value) || 0;
-  const prev = counted.get(node);
-  if (prev === target) return;
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    node.textContent = target.toFixed(decimals) + suffix;
-    counted.set(node, target);
-    return;
-  }
-  const from = prev ?? 0;
-  counted.set(node, target);
-  const t0 = performance.now(), dur = 620;
-  const step = (now) => {
-    const p = Math.min(1, (now - t0) / dur);
-    const eased = 1 - (1 - p) ** 3;
-    node.textContent = (from + (target - from) * eased).toFixed(decimals) + suffix;
-    if (p < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
-
-/* ---------- routing / nav ---------- */
+/* ==========================================================================
+   Nawigacja
+   ========================================================================== */
 let currentTab = 'home';
 
 function showTab(name, push = true) {
-  const panel = document.getElementById(name);
+  const panel = $(`#${name}`);
   if (!panel) return;
   currentTab = name;
 
@@ -161,18 +140,18 @@ function showTab(name, push = true) {
     n.classList.toggle('is-active', on);
     if (on) n.setAttribute('aria-current', 'page'); else n.removeAttribute('aria-current');
   });
-  $$('.panel').forEach((p) => p.classList.toggle('is-active', p.id === name));
+  $$('.panel').forEach((p) => p.classList.toggle('is-active', p === panel));
 
-  const active = $(`.nav-item[data-tab="${name}"] span`);
-  $('#page-title').textContent = active ? active.textContent : '';
-  $('#page-sub').textContent = t(`sub_${name}`) || '';
+  const label = $(`.nav-item[data-tab="${name}"] span`);
+  $s('page-title').textContent = label ? label.textContent : '';
+  $s('page-sub').textContent = t(`sub_${name}`) || '';
 
   document.body.classList.remove('nav-open');
-  $('#scroll').scrollTop = 0;
+  $s('scroll').scrollTop = 0;
   if (push && location.hash !== `#${name}`) history.replaceState(null, '', `#${name}`);
 
   if (name === 'settings') { loadSlots(); loadLoadedModels(); }
-  if (name === 'home') { loadStats(); }
+  if (name === 'home') loadStats();
   refresh(true);
 }
 
@@ -180,7 +159,7 @@ document.addEventListener('click', (e) => {
   const nav = e.target.closest('.nav-item');
   if (nav) { e.preventDefault(); showTab(nav.dataset.tab); return; }
   const goto = e.target.closest('[data-goto]');
-  if (goto) { showTab(goto.dataset.goto); }
+  if (goto) showTab(goto.dataset.goto);
 });
 
 $('#sidebar-open').addEventListener('click', () => document.body.classList.add('nav-open'));
@@ -192,8 +171,8 @@ const THEME_KEY = 'llmapi.theme';
 function applyTheme(mode) {
   document.documentElement.dataset.theme = mode;
   const dark = mode === 'dark';
-  $('#theme-icon').className = `ti ti-${dark ? 'sun' : 'moon'}`;
-  $('#theme-label').textContent = dark ? 'Light' : 'Dark';
+  $s('theme-icon').className = `ti ti-${dark ? 'sun' : 'moon'}`;
+  $s('theme-label').textContent = dark ? 'Light' : 'Dark';
   localStorage.setItem(THEME_KEY, mode);
   if (usageChart) applyChartTheme();
 }
@@ -205,14 +184,13 @@ $('#theme-toggle').addEventListener('click', () => {
 let lastFocus = null;
 function openModal(id) {
   lastFocus = document.activeElement;
-  const m = document.getElementById(id);
-  m.hidden = false;
+  $(`#${id}`).hidden = false;
   document.body.style.overflow = 'hidden';
-  const focusable = m.querySelector('input, select, button:not([data-noautofocus])');
-  (focusable || m).focus?.();
+  const focusable = $(`#${id} input, #${id} select, #${id} button`);
+  (focusable || $(`#${id}`)).focus?.();
 }
 function closeModal(id) {
-  document.getElementById(id).hidden = true;
+  $(`#${id}`).hidden = true;
   if (!$$('.modal:not([hidden])').length) document.body.style.overflow = '';
   lastFocus?.focus?.();
 }
@@ -224,14 +202,12 @@ $('#modal-cancel').addEventListener('click', () => closeModal('edit-modal'));
 $('#modal-save').addEventListener('click', saveEditKey);
 
 document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
-  const open = $$('.modal:not([hidden])').pop();
-  if (open) { closeModal(open.id); return; }
-  if (document.body.classList.contains('nav-open')) document.body.classList.remove('nav-open');
-});
-
-/* pułapka focusu w modalu */
-document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const open = $$('.modal:not([hidden])').pop();
+    if (open) { closeModal(open.id); return; }
+    if (document.body.classList.contains('nav-open')) document.body.classList.remove('nav-open');
+    return;
+  }
   if (e.key !== 'Tab') return;
   const m = $$('.modal:not([hidden])').pop();
   if (!m) return;
@@ -243,10 +219,9 @@ document.addEventListener('keydown', (e) => {
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 });
 
-/* confirm */
 let confirmAction = null;
 function askConfirm(message, action) {
-  $('#confirm-text').textContent = message;
+  $s('confirm-text').textContent = message;
   confirmAction = action;
   openModal('confirm-modal');
 }
@@ -261,31 +236,25 @@ $('#confirm-yes').addEventListener('click', async () => {
 /* ==========================================================================
    HOME
    ========================================================================== */
-const $s = (id) => document.getElementById(id);
-
-function renderSlots(slots, loaded) {
+function renderSlots(total, loaded) {
   const track = $s('slot-track');
-  track.replaceChildren();
-  loaded.forEach((m) => {
+  const rows = loaded.map((m) => {
     const busy = m.refcount > 0;
-    track.append(el('div', { class: `slot${busy ? ' is-busy' : ''}` },
+    return el('div', { class: `slot${busy ? ' is-busy' : ''}` },
       el('div', { class: 'slot-idx', text: String(m.slot) }),
       el('div', { class: 'slot-bar' },
         el('div', { class: 'slot-top' },
           el('span', { class: 'slot-dev', text: m.engine }),
-          el('span', { class: 'slot-name', text: m.name, title: m.name }),
-        ),
-        el('div', { class: 'slot-fill' },
-          el('span', { style: `width:${busy ? 100 : 22}%` })),
-      ),
+          el('span', { class: 'slot-name', text: m.name, title: m.name })),
+        el('div', { class: 'slot-fill' }, el('span', { style: `width:${busy ? 100 : 18}%` }))),
       el('div', { class: 'slot-badge' },
         icon(busy ? 'loader-2' : 'circle-check'),
         busy ? t('slot_busy') : t('slot_loaded')),
-    ));
+    );
   });
 
-  for (let i = loaded.length; i < slots; i++) {
-    track.append(el('div', { class: 'slot' },
+  for (let i = loaded.length; i < total; i++) {
+    rows.push(el('div', { class: 'slot' },
       el('div', { class: 'slot-idx', text: '—' }),
       el('div', { class: 'slot-bar' },
         el('div', { class: 'slot-top' },
@@ -294,21 +263,21 @@ function renderSlots(slots, loaded) {
       el('div', { class: 'slot-badge' }, icon('circle'), t('slot_idle')),
     ));
   }
-  $s('slots-chip').textContent = `${loaded.length}/${slots} ${t('stat_slots')}`;
+  track.replaceChildren(...rows);
+  $s('slots-chip').textContent = `${loaded.length}/${total} ${t('stat_slots')}`;
 }
 
 function renderRecent(rows) {
   const tb = $s('recent-tbody');
   if (!rows.length) {
-    tb.replaceChildren(el('tr', {},
-      el('td', { colspan: 6 },
-        el('div', { class: 'empty' },
-          icon('inbox'),
-          el('p', { text: t('home_no_requests') })))));
+    tb.replaceChildren(el('tr', {}, el('td', { colspan: 6 },
+      el('div', { class: 'empty' },
+        icon('inbox'),
+        el('p', { text: t('home_no_requests') })))));
     return;
   }
   tb.replaceChildren(...rows.map((r) => el('tr', {},
-    el('td', { class: 'dim' }, ago(r.timestamp), el('span', { class: 'dim' }, ` · ${fmtDT(r.timestamp).slice(-8)}`)),
+    el('td', { class: 'dim' }, `${ago(r.timestamp)} · ${fmtTime(r.timestamp)}`),
     el('td', {}, el('span', { class: 'ellip mono', title: r.model, text: r.model })),
     el('td', { class: 'dim' }, el('span', { class: 'ellip', text: r.key_name || '—' })),
     el('td', { class: 'num' }, el('strong', { text: num(r.total_tokens) })),
@@ -322,7 +291,6 @@ async function loadStats() {
     const d = await api('/api/stats');
     const last = d.last;
 
-    // ostatni model
     const lm = $s('s-last-model');
     if (last?.model) { lm.textContent = last.model; lm.title = last.model; }
     else { lm.textContent = t('models_none'); lm.title = ''; }
@@ -330,109 +298,99 @@ async function loadStats() {
       ? `${ago(last.timestamp)} · ${dec(last.tokens_per_second, 1)} t/s`
       : t('home_never_used');
 
-    countTo($s('s-tokens'), d.total_tokens);
+    $s('s-tokens').textContent = num(d.total_tokens);
     $s('s-tokens-sub').textContent = d.requests_1h
       ? `+${num(d.tokens_1h)} ${t('last_hour')}` : t('stat_no_recent');
 
-    countTo($s('s-requests'), d.total_requests);
+    $s('s-requests').textContent = num(d.total_requests);
     $s('s-requests-sub').textContent = d.requests_1h
       ? `+${num(d.requests_1h)} ${t('last_hour')}` : t('stat_no_recent');
 
-    countTo($s('s-tps-n'), d.avg_tps, { decimals: 1 });
+    $s('s-tps-n').textContent = dec(d.avg_tps, 1);
     $s('s-tps-sub').textContent = `${t('stat_best')} ${dec(d.best_tps, 1)} t/s`;
 
-    countTo($s('s-models'), d.models_on_disk);
-    const loadedN = d.loaded_models.length;
-    $s('s-models-sub').textContent = `${loadedN} ${t('stat_in_vram')}`;
+    $s('s-models').textContent = num(d.models_on_disk);
+    $s('s-models-sub').textContent = `${d.loaded_models.length} ${t('stat_in_memory')}`;
 
     $s('s-uptime').textContent = uptime(d.uptime);
     $s('s-uptime-sub').textContent = `port ${d.port} · ${d.local_ip}`;
 
-    $s('hero-port').textContent = d.port;
-
     renderSlots(d.slots_total, d.loaded_models);
     renderRecent(d.recent || []);
 
-    const chips = $s('home-loaded');
-    chips.replaceChildren(...(d.loaded_models.length
+    $s('home-loaded').replaceChildren(...(d.loaded_models.length
       ? d.loaded_models.map((m) => el('div', { class: 'mchip' },
-          icon('cpu-2'), el('span', { text: m.name }),
+          icon('cpu-2'),
+          el('span', { text: m.name }),
           el('em', { text: `slot ${m.slot} · ${m.engine}` })))
       : [el('div', { class: 'mchip' }, icon('info-circle'), el('em', { text: t('home_none_loaded') }))]));
-  } catch (e) {
-    console.error('stats', e);
-  }
+  } catch (e) { console.error('stats', e); }
 }
 
 /* ==========================================================================
-   MODELE
+   MODELS
    ========================================================================== */
 function renderModels(models, loadedNames) {
   const host = $s('models-list');
   if (!models.length) {
     host.replaceChildren(el('div', { class: 'empty', style: 'grid-column:1/-1' },
-      icon('cloud-download'),
-      el('p', { text: t('js_no_models') })));
+      icon('cloud-download'), el('p', { text: t('js_no_models') })));
     return;
   }
   host.replaceChildren(...models.map((m) => {
     const isLoaded = loadedNames.includes(m.id);
-    return el('article', { class: `model-card reveal${isLoaded ? ' is-loaded' : ''}` },
-      el('div', { class: 'mc-top' },
-        el('div', { class: 'mc-ic' }, icon('cpu-2')),
-        el('div', { class: 'mc-name', text: m.id })),
+    return el('article', { class: `model-card${isLoaded ? ' is-loaded' : ''}` },
+      el('div', { class: 'mc-top' }, el('div', { class: 'mc-name', text: m.id })),
       el('div', { class: `mc-status ${isLoaded ? 'ok' : 'idle'}` },
         icon(isLoaded ? 'circle-check' : 'database'),
         el('span', { text: isLoaded ? t('js_loaded_vram') : t('js_avail_disk') })),
       el('div', { class: 'mc-id' },
         el('span', { text: m.id, title: m.id }),
         el('button', {
-          class: 'icon-btn', 'data-tip': t('js_copy_id'),
-          onclick: () => copyText(m.id).then((ok) => toast(ok ? t('js_copied') : t('js_copy_fail'), ok ? 'ok' : 'err')),
+          class: 'icon-btn', 'aria-label': t('js_copy_id'),
+          onclick: () => copyAndToast(m.id),
         }, icon('copy'))),
     );
   }));
 }
 
 /* ==========================================================================
-   KLUCZE API
+   KEYS
    ========================================================================== */
 let keysCache = [];
 
-function engineBadge(engine) {
-  return el('span', { class: `engine-badge ${engine}`, text: (engine || 'vulkan').toUpperCase() });
-}
+const engineBadge = (engine) =>
+  el('span', { class: `engine-badge ${engine}`, text: (engine || 'vulkan').toUpperCase() });
 
 function renderKeys(keys) {
   keysCache = keys;
-  const tb = $s('keys-list');
   $s('keys-empty').hidden = keys.length > 0;
   $s('keys-count-chip').textContent = String(keys.length);
   $s('nav-keys-count').textContent = String(keys.length);
+  $s('log-keys-card').hidden = keys.length === 0;
 
   if (!keys.length) {
-    tb.replaceChildren();
+    $s('keys-list').replaceChildren();
     renderLogKeyGrid([]);
     return;
   }
 
-  tb.replaceChildren(...keys.map((k) => el('tr', {},
+  $s('keys-list').replaceChildren(...keys.map((k) => el('tr', {},
     el('td', {},
       el('div', { class: 'key-name' },
         el('strong', { text: k.name }),
-        el('span', {
-          class: 'key-val', 'data-tip': t('js_copy_key'),
-          onclick: () => copyText(k.api_key).then((ok) => toast(ok ? t('js_copied') : t('js_copy_fail'), ok ? 'ok' : 'err')),
-        }, icon('copy'), el('span', { text: maskKey(k.api_key) })))),
+        el('button', {
+          class: 'key-val', 'aria-label': t('js_copy_key'), title: t('js_copy_key'),
+          onclick: () => copyAndToast(k.api_key),
+        }, el('span', { text: maskKey(k.api_key) })))),
     el('td', {}, engineBadge(k.engine)),
-    el('td', { class: 'dim', title: fmtDT(k.last_used) },
-      k.last_used ? ago(k.last_used) : t('js_never')),
+    el('td', { class: 'dim', title: fmtDT(k.last_used) }, k.last_used ? ago(k.last_used) : t('js_never')),
     el('td', { class: 'num' }, el('strong', { text: num(k.total_tokens) })),
     el('td', {},
       el('div', { class: 'row-acts' },
-        el('button', { class: 'icon-btn', 'data-tip': t('js_edit'), onclick: () => openEdit(k) }, icon('pencil')),
+        el('button', { class: 'icon-btn', 'aria-label': t('js_edit'), onclick: () => openEdit(k) }, icon('pencil')),
         el('button', {
-          class: 'icon-btn danger', 'data-tip': t('js_delete'),
+          class: 'icon-btn danger', 'aria-label': t('js_delete'),
           onclick: () => askConfirm(t('confirm_delete_key').replace('{name}', k.name), () => deleteKey(k.id)),
         }, icon('trash')))),
   )));
@@ -441,9 +399,9 @@ function renderKeys(keys) {
 
 function randomKey() {
   const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const bytesArr = new Uint8Array(24);
-  crypto.getRandomValues(bytesArr);
-  return 'sk-' + Array.from(bytesArr, (b) => alphabet[b % alphabet.length]).join('');
+  const buf = new Uint8Array(24);
+  crypto.getRandomValues(buf);
+  return 'sk-' + Array.from(buf, (b) => alphabet[b % alphabet.length]).join('');
 }
 
 $('#gen-key').addEventListener('click', () => {
@@ -462,7 +420,7 @@ $('#create-key-btn').addEventListener('click', async (e) => {
     msg.className = 'form-msg is-err';
     msg.textContent = t('js_err_fields');
     (name ? $s('new-key-value') : $s('new-key-name')).classList.add('shake');
-    setTimeout(() => $$('.shake').forEach((n) => n.classList.remove('shake')), 600);
+    setTimeout(() => $$('.shake').forEach((n) => n.classList.remove('shake')), 500);
     return;
   }
   btn.classList.add('is-spinning');
@@ -474,7 +432,7 @@ $('#create-key-btn').addEventListener('click', async (e) => {
     msg.className = 'form-msg';
     msg.textContent = '';
     toast(t('js_created'), 'ok');
-    keysCache = [];                 // wymuś odświeżenie listy
+    keysCache = [];
     await refresh(true);
   } catch (err) {
     msg.className = 'form-msg is-err';
@@ -521,24 +479,21 @@ async function deleteKey(id) {
 }
 
 /* ==========================================================================
-   LOGI
+   LOGS
    ========================================================================== */
 let currentLogKey = null;
 let logRows = [];
 let usageChart = null;
 
 function renderLogKeyGrid(keys) {
-  const host = $s('log-keys-grid');
-  const empty = $s('no-keys-msg');
-  empty.hidden = keys.length > 0;
-  if (!keys.length) { host.replaceChildren(); return; }
+  $s('no-keys-msg').hidden = keys.length > 0;
+  if (!keys.length) { $s('log-keys-grid').replaceChildren(); return; }
 
   const sorted = [...keys].sort((a, b) => (b.last_used || 0) - (a.last_used || 0));
-  host.replaceChildren(...sorted.map((k) => el('button', { class: 'kcard reveal', onclick: () => selectLogKey(k) },
+  $s('log-keys-grid').replaceChildren(...sorted.map((k) => el('button', { class: 'kcard', onclick: () => selectLogKey(k) },
     el('div', { class: 'kcard-head' }, icon('key'), el('strong', { text: k.name })),
-    el('div', { class: 'kcard-row' }, icon('coins'), el('span', { text: t('stat_tokens') }),
-      el('b', { text: num(k.total_tokens) })),
-    el('div', { class: 'kcard-row' }, icon('clock'), el('span', { text: t('th_last_used') }),
+    el('div', { class: 'kcard-row' }, el('span', { text: t('stat_tokens') }), el('b', { text: num(k.total_tokens) })),
+    el('div', { class: 'kcard-row' }, el('span', { text: t('th_last_used') }),
       el('b', { text: k.last_used ? ago(k.last_used) : t('js_never') })),
   )));
 }
@@ -547,10 +502,7 @@ async function selectLogKey(k) {
   currentLogKey = k.id;
   $s('log-keys-view').hidden = true;
   $s('key-details').hidden = false;
-  const title = $s('key-details-title');
-  title.replaceChildren(icon('key'), el('span', { text: k.name }));
-  title.dataset.i18nTitle = k.name;
-  renderCode._sig = null;
+  $s('key-details-title').replaceChildren(el('span', { text: k.name }));
   $s('logs-back').focus();
   await loadLogs();
 }
@@ -568,51 +520,50 @@ function applyChartTheme() {
   const cs = getComputedStyle(document.documentElement);
   usageChart.options.scales.y.ticks.color = cs.getPropertyValue('--text-3');
   usageChart.options.scales.x.ticks.color = cs.getPropertyValue('--text-3');
-  usageChart.options.scales.y.grid.color = 'rgba(127,140,170,.12)';
+  usageChart.options.scales.y.grid.color = 'rgba(127,127,140,.14)';
+  usageChart.options.plugins.tooltip.backgroundColor = cs.getPropertyValue('--bg-nav');
+  usageChart.options.plugins.tooltip.borderColor = cs.getPropertyValue('--border-2');
+  usageChart.options.plugins.tooltip.titleColor = cs.getPropertyValue('--text');
+  usageChart.options.plugins.tooltip.bodyColor = cs.getPropertyValue('--text-2');
   usageChart.update('none');
 }
 
 function ensureChart() {
   if (usageChart) return usageChart;
-  const ctx = $s('usageChart').getContext('2d');
   const cs = getComputedStyle(document.documentElement);
-
-  usageChart = new Chart(ctx, {
+  usageChart = new Chart($s('usageChart').getContext('2d'), {
     type: 'bar',
     data: {
-      labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
+      labels: Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`),
       datasets: [{
         label: t('th_tokens'),
         data: Array(24).fill(0),
-        backgroundColor: 'rgba(139,124,248,.45)',
-        borderColor: 'rgba(139,124,248,.9)',
-        borderWidth: 1,
-        borderRadius: 5,
-        hoverBackgroundColor: 'rgba(139,124,248,.75)',
+        backgroundColor: cs.getPropertyValue('--accent').trim(),
+        borderRadius: 2,
+        maxBarThickness: 22,
       }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 500, easing: 'easeOutQuart' },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: cs.getPropertyValue('--surface-3'),
+          backgroundColor: cs.getPropertyValue('--bg-nav'),
           borderColor: cs.getPropertyValue('--border-2'),
           borderWidth: 1,
           titleColor: cs.getPropertyValue('--text'),
           bodyColor: cs.getPropertyValue('--text-2'),
-          padding: 10,
-          cornerRadius: 8,
+          padding: 9,
+          cornerRadius: 6,
           displayColors: false,
         },
       },
       scales: {
-        x: { grid: { display: false }, ticks: { color: cs.getPropertyValue('--text-3'), font: { size: 10 } } },
+        x: { grid: { display: false }, ticks: { color: cs.getPropertyValue('--text-3'), font: { size: 10 }, maxRotation: 0, autoSkipPadding: 12 } },
         y: {
           beginAtZero: true,
-          grid: { color: 'rgba(127,140,170,.12)' },
+          grid: { color: 'rgba(127,127,140,.14)' },
           ticks: { color: cs.getPropertyValue('--text-3'), font: { size: 10 }, precision: 0 },
         },
       },
@@ -626,18 +577,18 @@ function renderLogs() {
   const rows = filter ? logRows.filter((r) => (r.model || '').toLowerCase().includes(filter)) : logRows;
 
   $s('logs-empty').hidden = rows.length > 0;
-  $s('logs-table-wrap').hidden = rows.length === 0;   // pusty nagłówek bez wierszy wygląda źle
+  $s('logs-table-wrap').hidden = rows.length === 0;
   if (!rows.length) { $s('logs-tbody').replaceChildren(); return; }
 
   $s('logs-tbody').replaceChildren(...[...rows].reverse().map((r) => el('tr', {},
     el('td', { class: 'dim' }, fmtDT(r.timestamp)),
     el('td', {},
-      el('div', { style: 'display:flex;align-items:center;gap:6px' },
+      el('div', { class: 'cell-flex' },
         el('span', { class: 'ellip mono', title: r.model, text: r.model }),
         el('button', {
-          class: 'icon-btn', style: 'width:24px;height:24px;font-size:.95rem;border:0',
-          'data-tip': t('js_copy_id'),
-          onclick: () => copyText(r.model).then((ok) => toast(ok ? t('js_copied') : t('js_copy_fail'), ok ? 'ok' : 'err')),
+          class: 'icon-btn', style: 'width:22px;height:22px;font-size:13px',
+          'aria-label': t('js_copy_id'),
+          onclick: () => copyAndToast(r.model),
         }, icon('copy')))),
     el('td', { class: 'num dim' }, dec(r.elapsed_seconds, 2)),
     el('td', { class: 'num dim' }, dec(r.ttft, 3)),
@@ -652,16 +603,14 @@ async function loadLogs() {
   if (!currentLogKey) return;
   try {
     logRows = await api(`/api/logs/${currentLogKey}`);
-    const sum = logRows.reduce((a, r) => {
-      a.tokens += r.total_tokens || 0;
-      a.tps.push(r.tokens_per_second || 0);
-      return a;
-    }, { tokens: 0, tps: [] });
-    countTo($s('lg-tokens'), sum.tokens);
-    countTo($s('lg-requests'), logRows.length);
-    const avg = sum.tps.length ? sum.tps.reduce((x, y) => x + y, 0) / sum.tps.length : 0;
-    countTo($s('lg-avg'), avg, { decimals: 1 });
-    countTo($s('lg-best'), Math.max(0, ...sum.tps), { decimals: 1 });
+    const tokens = logRows.reduce((a, r) => a + (r.total_tokens || 0), 0);
+    const tps = logRows.map((r) => r.tokens_per_second || 0);
+    const avg = tps.length ? tps.reduce((x, y) => x + y, 0) / tps.length : 0;
+
+    $s('lg-tokens').textContent = num(tokens);
+    $s('lg-requests').textContent = num(logRows.length);
+    $s('lg-avg').textContent = dec(avg, 1);
+    $s('lg-best').textContent = dec(tps.length ? Math.max(...tps) : 0, 1);
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const hourly = Array(24).fill(0);
@@ -679,7 +628,7 @@ async function loadLogs() {
 $('#log-search').addEventListener('input', renderLogs);
 
 /* ==========================================================================
-   POŁĄCZENIE
+   CONNECT
    ========================================================================== */
 let serverIp = '127.0.0.1';
 let codeLang = 'python';
@@ -689,18 +638,16 @@ const CODE = {
     ['c-com', '# pip install openai'],
     ['c', 'from openai import OpenAI'],
     ['', ''],
-    ['c-com', '# 1. Utwórz klucz w zakładce "Klucze API"'],
     ['c-key', `client = OpenAI(base_url="http://${ip}:${PORT}/v1", api_key="${key}")`],
     ['', ''],
-    ['c-com', '# 2. Użyj nazwy modelu z zakładki "Modele"'],
-    ['res', 'stream = client.chat.completions.create('],
-    ['c-key', `    model="MODEL_NAME",`],
-    ['c-key', '    messages=[{"role": "user", "content": "Cześć!"}],'],
-    ['c-key', '    stream=True,'],
-    ['', '    temperature=0.7,'],
+    ['c-com', '# model name must match the "Models" tab exactly'],
+    ['fn', 'stream = client.chat.completions.create('],
+    ['c-key', '    model="MODEL_NAME",'],
+    ['c-key', '    messages=[{"role": "user", "content": "Hello!"}],'],
+    ['', '    stream=True,'],
     ['', ')'],
     ['', ''],
-    ['c-com', '# 3. Strumień tokenów'],
+    ['c-com', '# stream the response'],
     ['fn', 'for chunk in stream:'],
     ['c-key', '    print(chunk.choices[0].delta.content or "", end="", flush=True)'],
   ],
@@ -711,7 +658,7 @@ const CODE = {
     ['c-key', `  -H "Authorization: Bearer ${key}" \\`],
     ['c-key', '  -d \'{'],
     ['c-key', '    "model": "MODEL_NAME",'],
-    ['c-key', '    "messages": [{"role": "user", "content": "Cześć!"}],'],
+    ['c-key', '    "messages": [{"role": "user", "content": "Hello!"}],'],
     ['c-key', '    "stream": true'],
     ['', "  }'"],
   ],
@@ -721,9 +668,9 @@ const CODE = {
     ['', ''],
     ['c-key', `const client = new OpenAI({ baseURL: "http://${ip}:${PORT}/v1", apiKey: "${key}" });`],
     ['', ''],
-    ['c-com', 'const stream = await client.chat.completions.create({'],
+    ['fn', 'const stream = await client.chat.completions.create({'],
     ['c-key', '  model: "MODEL_NAME",'],
-    ['c-key', '  messages: [{ role: "user", content: "Cześć!" }],'],
+    ['c-key', '  messages: [{ role: "user", content: "Hello!" }],'],
     ['', '  stream: true,'],
     ['', '});'],
     ['', ''],
@@ -734,27 +681,26 @@ const CODE = {
 };
 
 const CODE_META = {
-  python: ['example.py', { com: 'c-com', key: 'c-key', fn: 'fn', res: 'fn' }],
-  curl:   ['request.sh',  { com: 'c-com', key: 'c-key', fn: 'fn', res: 'fn' }],
-  js:     ['example.mjs', { com: 'c-com', key: 'c-key', fn: 'fn', res: 'fn' }],
+  python: ['example.py', { com: 'c-com', key: 'c-key', fn: 'fn' }],
+  curl:   ['request.sh',  { com: 'c-com', key: 'c-key', fn: 'fn' }],
+  js:     ['example.mjs', { com: 'c-com', key: 'c-key', fn: 'fn' }],
 };
 
 function renderCode() {
-  const key = keysCache[0]?.api_key || 'sk-TWOJ_KLUCZ';
+  const key = keysCache[0]?.api_key || 'sk-YOUR_API_KEY';
   const [file, cls] = CODE_META[codeLang];
+  const sig = `${codeLang}|${serverIp}|${key}`;
+  if (renderCode._sig === sig) return;     // nie przebudowuj bez zmian
+  renderCode._sig = sig;
+
   const lines = CODE[codeLang](serverIp, key).map(([type, text]) => {
-    const k = type === 'c' ? '' : (type === 'res' ? cls.res : cls[type]) || '';
-    const span = el('span', { class: k, text });
+    const span = el('span', { class: type === 'c' ? '' : (cls[type] || ''), text });
     span.style.whiteSpace = 'pre';
     return span;
   });
 
-  const pre = $s('connection-code');
-  const sig = `${codeLang}|${serverIp}|${key}`;
-  if (renderCode._sig === sig) return;      // nie przebudowuj bez zmian
-  renderCode._sig = sig;
-
   $s('code-file').textContent = file;
+  const pre = $s('connection-code');
   pre.replaceChildren();
   lines.forEach((span, i) => {
     pre.append(span);
@@ -770,32 +716,27 @@ $('#code-tabs').addEventListener('click', (e) => {
   renderCode();
 });
 
-$('#copy-code').addEventListener('click', async () => {
-  const ok = await copyText($s('connection-code').textContent);
-  toast(ok ? t('js_copied') : t('js_copy_fail'), ok ? 'ok' : 'err');
-});
+$('#copy-code').addEventListener('click', () => copyAndToast($s('connection-code').textContent));
 
 function renderEndpoints() {
-  const host = $s('endpoints');
   const eps = [
-    { icon: 'world',  label: t('ep_local'),   value: `http://127.0.0.1:${PORT}/v1` },
-    { icon: 'server', label: t('ep_lan'),     value: `http://${serverIp}:${PORT}/v1` },
-    { icon: 'plug',   label: t('ep_chat'),    value: '/v1/chat/completions' },
-    { icon: 'api',    label: t('ep_models'),  value: '/v1/models' },
+    { icon: 'world',  label: t('ep_local'),  value: `http://127.0.0.1:${PORT}/v1` },
+    { icon: 'device-lan', label: t('ep_lan'), value: `http://${serverIp}:${PORT}/v1` },
+    { icon: 'messages', label: t('ep_chat'),   value: '/v1/chat/completions' },
+    { icon: 'list',     label: t('ep_models'), value: '/v1/models' },
   ];
-  host.replaceChildren(...eps.map((e) => el('div', { class: 'ep reveal' },
+  $s('endpoints').replaceChildren(...eps.map((e) => el('div', { class: 'ep' },
     el('div', { class: 'ep-ic' }, icon(e.icon)),
     el('div', { class: 'ep-body' },
       el('small', { text: e.label }),
       el('code', {
-        title: t('js_copy_id'),
-        onclick: () => copyText(e.value.startsWith('http') ? e.value : `http://${serverIp}:${PORT}${e.value}`)
-          .then((ok) => toast(ok ? t('js_copied') : t('js_copy_fail'), ok ? 'ok' : 'err')),
+        title: t('js_copy'),
+        onclick: () => copyAndToast(e.value.startsWith('http') ? e.value : `http://${serverIp}:${PORT}${e.value}`),
       }, e.value)))));
 }
 
 /* ==========================================================================
-   USTAWIENIA
+   SETTINGS
    ========================================================================== */
 const ENGINES = ['cpu', 'cuda', 'vulkan'];
 
@@ -804,18 +745,18 @@ async function loadSlots() {
     const slots = await api('/api/settings/slots');
     $s('slots-container').replaceChildren(...Object.entries(slots).map(([idx, s]) =>
       el('div', { class: 'slot-edit' },
-        el('div', { class: 'field', style: 'flex:0 0 auto;min-width:64px' },
+        el('div', { class: 'field field-fix' },
           el('label', { text: `${t('settings_slot_label')} ${idx}` })),
         el('div', { class: 'field' },
           el('label', { text: t('settings_device_label') }),
           el('select', { class: 'slot-sel', dataset: { slot: idx } },
             ...ENGINES.map((d) => el('option', { value: d, selected: s.device === d }, d.toUpperCase())))),
-        el('div', { class: 'field', style: 'flex:1 1 190px' },
+        el('div', { class: 'field', style: 'flex:1 1 180px' },
           el('label', { text: t('settings_loaded_in') }),
           el('div', { class: 'info' },
             icon(s.loaded_model ? 'circle-check' : 'circle'),
             el('span', { text: s.loaded_model || t('js_never') }))),
-        el('button', { class: 'btn btn-ghost btn-sm', onclick: () => saveSlot(idx) },
+        el('button', { class: 'btn', onclick: () => saveSlot(idx) },
           icon('device-floppy'), el('span', { text: t('settings_save_btn') })),
       )));
   } catch (e) { console.error('slots', e); }
@@ -840,23 +781,23 @@ async function loadLoadedModels() {
     const d = await api('/api/status');
     const entries = Object.entries(d.loaded_models || {});
     if (!entries.length) {
-      host.replaceChildren(el('div', { class: 'empty' }, icon('cpu-off'),
-        el('p', { text: t('settings_no_models') })));
+      host.replaceChildren(el('div', { class: 'empty' },
+        icon('cpu-off'), el('p', { text: t('settings_no_models') })));
       return;
     }
     host.replaceChildren(...entries.map(([name, m]) => el('div', { class: 'slot-edit' },
-      el('div', { class: 'field', style: 'flex:1 1 210px' },
+      el('div', { class: 'field', style: 'flex:1 1 200px' },
         el('label', { text: name }),
         el('div', { class: 'info' }, icon('cpu-2'),
           el('span', { text: `${t('settings_loaded_in')} ${m.slot} · ${String(m.engine).toUpperCase()}` }))),
-      el('div', { class: 'field', style: 'flex:0 0 auto' },
+      el('div', { class: 'field field-fix' },
         el('label', { text: t('settings_n_ctx') }),
-        el('div', { class: 'info' }, icon('stack-2'), el('span', { text: String(m.n_ctx) }))),
-      el('div', { class: 'field', style: 'flex:0 0 auto' },
+        el('div', { class: 'info' }, el('span', { text: num(m.n_ctx) }))),
+      el('div', { class: 'field field-fix' },
         el('label', { text: t('settings_refcount') }),
-        el('div', { class: 'info' }, icon('activity'), el('span', { text: String(m.refcount) }))),
+        el('div', { class: 'info' }, el('span', { text: String(m.refcount) }))),
       el('button', {
-        class: 'btn btn-ghost btn-sm', 'data-tip': t('settings_unload'),
+        class: 'btn btn-sm', 'aria-label': t('settings_unload'),
         onclick: async () => {
           try {
             await api(`/api/unload?model_name=${encodeURIComponent(name)}`, { method: 'POST' });
@@ -887,9 +828,7 @@ let failures = 0;
 let refreshing = false;
 
 function setStatus(isOnline, sub) {
-  const dot = $s('status-indicator');
-  dot.classList.toggle('is-online', isOnline);
-  dot.classList.toggle('is-busy', false);
+  $s('status-indicator').classList.toggle('is-online', isOnline);
   $s('status-text').textContent = isOnline ? t('js_online') : t('js_offline');
   if (sub !== undefined) $s('status-sub').textContent = sub;
   if (online === isOnline) return;
@@ -897,13 +836,12 @@ function setStatus(isOnline, sub) {
   if (!isOnline) toast(t('js_err_conn'), 'err');
 }
 
-/* Interwał rośnie przy błędach i w tle karty, żeby nie obciążać serwera. */
+/* Interwał rośnie przy błędach, a gdy karta jest w tle — rzadziej. */
 function schedule() {
   clearTimeout(timer);
-  const base = online ? 2000 : 6000;
-  const max = 30000;
-  const delay = Math.min(max, base * (1 + failures * 0.7));
-  timer = setTimeout(poll, document.hidden ? Math.max(delay, 10000) : delay);
+  const base = online ? 2500 : 7000;
+  const delay = Math.min(30000, base * (1 + failures * 0.6));
+  timer = setTimeout(poll, document.hidden ? Math.max(delay, 12000) : delay);
 }
 
 async function refresh(force = false) {
@@ -911,13 +849,12 @@ async function refresh(force = false) {
   refreshing = true;
   try {
     const [status, models, keys] = await Promise.all([
-      api('/api/status'),
-      api('/v1/models'),
-      api('/api/keys'),
+      api('/api/status'), api('/v1/models'), api('/api/keys'),
     ]);
-    setStatus(true, `${status.local_ip}:${status.port}`);
     serverIp = status.local_ip;
-    renderCode._sig = null;
+    setStatus(true, `${serverIp}:${status.port}`);
+
+    const loadedNames = Object.keys(status.loaded_models || {});
     $s('active-model-name').textContent = loadedNames[0] || t('models_none');
 
     if (currentTab === 'home') await loadStats();
@@ -931,7 +868,7 @@ async function refresh(force = false) {
     if (JSON.stringify(keys) !== JSON.stringify(keysCache)) renderKeys(keys);
 
     failures = 0;
-  } catch (e) {
+  } catch {
     setStatus(false, '—');
     failures++;
   } finally {
@@ -943,7 +880,6 @@ async function poll() {
   if (document.hidden) { schedule(); return; }
   try {
     if (currentTab === 'home') {
-      // Na HOME wystarczy status + stats — nie ciągniemy listy kluczy.
       const s = await api('/api/status');
       serverIp = s.local_ip;
       setStatus(true, `${s.local_ip}:${s.port}`);
@@ -951,7 +887,7 @@ async function poll() {
     } else {
       const [status, keys] = await Promise.all([api('/api/status'), api('/api/keys')]);
       serverIp = status.local_ip;
-      setStatus(true, `${status.local_ip}:${status.port}`);
+      setStatus(true, `${serverIp}:${status.port}`);
       if (JSON.stringify(keys) !== JSON.stringify(keysCache)) renderKeys(keys);
       if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); }
       if (currentTab === 'connect') { renderEndpoints(); renderCode(); }
@@ -973,6 +909,7 @@ $('#refresh-now').addEventListener('click', async (e) => {
   await refresh(true);
   if (currentLogKey) await loadLogs();
   if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); }
+  if (currentTab === 'connect') { renderEndpoints(); renderCode(); }
   btn.classList.remove('is-spinning');
 });
 
@@ -992,15 +929,14 @@ function start() {
 
   renderEndpoints();
   renderCode();
-  loadStats();
   refresh(true).then(schedule);
-  setTimeout(schedule, 2000);
+  setTimeout(schedule, 3000);
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
 else start();
 
-/* i18n musi znać te funkcje, a i18n.js ładuje się przed script.js */
-window.LLMAPI = { toast, copyText, showTab, loadStats, renderCode, renderEndpoints, renderKeys };
+/* i18n.js potrzebuje tych, żeby przerysować dane po zmianie języka. */
+window.LLMAPI = { toast, showTab, loadStats, renderCode, renderEndpoints, renderKeys };
 
 })();

@@ -151,8 +151,32 @@ const iconsCss = read('web/vendor/tabler-icons.min.css');
 const used = [...new Set([...(html + js).matchAll(/ti-([a-z0-9-]+)/g)].map((m) => m[1]))];
 const missing = used.filter((n) => !iconsCss.includes(`.ti-${n}:`));
 check(`wszystkie ikony (${used.length}) istnieja w vendor CSS`, missing.length === 0, missing.join(', '));
-check('favicon to SVG, nie emoji', html.includes("data:image/svg+xml") && !html.includes('%E2%9A%A1'));
+check('favicon wskazuje na lokalny SVG', html.includes('branding/icon.svg'));
+check('plik ikony istnieje', fs.existsSync(path.join(ROOT, 'web', 'branding', 'icon.svg')));
+check('ikona nie jest emoji', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(html.match(/<title>[\s\S]*?<\/title>/)?.[0] || ''));
 check('brak odwolan do CDN', !/https?:\/\/(cdn\.jsdelivr|unpkg|fonts\.googleapis)/.test(html + js));
+
+/* ---------- 5b. Brak "AI slop" ---------- */
+console.log('\n[5b] Brak dekoracji typu "AI slop"');
+const css = read('web/style.css');
+for (const [name, re] of [
+  ['animowane tlo (aurora)', /aurora|@keyframes\s+drift/i],
+  ['gradientowy tekst', /background-clip:\s*text/],
+  ['glassmorphism', /backdrop-filter/],
+  ['animowane liczniki', /countTo|requestAnimationFrame/],
+  ['shimmer/skeleton', /@keyframes\s+shimmer|\.skel/],
+  ['pulsujaca kropka', /@keyframes\s+ping/],
+  ['efekt ripple na przyciskach', /\.btn::after/],
+  ['plywajace ikony', /@keyframes\s+floaty/],
+  ['duzy wlasny hover-glow', /\.stat:hover::before/],
+]) {
+  const src = html + js + css;
+  check(`brak: ${name}`, !re.test(src));
+}
+check('wszystkie ikony nadal istnieja w vendor CSS', missing.length === 0, missing.join(', '));
+check('nie ma wielu kolorow akcentu w .brand-mark', !/linear-gradient/.test(css.split('.brand-mark')[1]?.split('}')[0] || ''));
+check('min-height:0 na kontenerze scroll', /\.scroll\s*\{[^}]*min-height:\s*0/.test(css));
+check('min-height:0 na .nav', /\.nav\s*\{[^}]*min-height:\s*0/.test(css));
 
 /* ---------- 6. Bezpieczenstwo ---------- */
 console.log('\n[6] Bezpieczenstwo (XSS)');

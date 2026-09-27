@@ -1,17 +1,16 @@
 <!DOCTYPE html>
-<html lang="pl" data-theme="dark">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
 <title>LocalLLMAPI</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b7cf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 11l-3 3 3 3'/%3E%3Cpath d='M13 7h4'/%3E%3Cpath d='M13 17h4'/%3E%3Crect width='20' height='16' x='2' y='4' rx='2'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="branding/icon.svg">
+<link rel="apple-touch-icon" href="branding/icon.svg">
 <link rel="stylesheet" href="vendor/tabler-icons.min.css">
-<link rel="stylesheet" href="style.css?v=30">
+<link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
-
-<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
 
 <div class="app">
 
@@ -23,35 +22,34 @@
         <strong>LocalLLMAPI</strong>
         <small data-i18n="brand_tagline">Local inference router</small>
       </div>
-      <button class="icon-btn sidebar-close" id="sidebar-close" aria-label="Zamknij menu">
+      <button class="icon-btn sidebar-close" id="sidebar-close" aria-label="Close menu">
         <i class="ti ti-x"></i>
       </button>
     </div>
 
     <nav class="nav" id="nav">
-      <span class="nav-label" data-i18n="nav_label_overview">Przegląd</span>
       <a href="#home" class="nav-item is-active" data-tab="home">
         <i class="ti ti-home-2"></i> <span data-i18n="nav_home">Home</span>
       </a>
       <a href="#models" class="nav-item" data-tab="models">
-        <i class="ti ti-cpu-2"></i> <span data-i18n="nav_models">Modele</span>
+        <i class="ti ti-cpu-2"></i> <span data-i18n="nav_models">Models</span>
       </a>
 
-      <span class="nav-label" data-i18n="nav_label_manage">Zarządzanie</span>
+      <span class="nav-label" data-i18n="nav_label_manage">Manage</span>
       <a href="#keys" class="nav-item" data-tab="keys">
-        <i class="ti ti-key"></i> <span data-i18n="nav_keys">Klucze API</span>
+        <i class="ti ti-key"></i> <span data-i18n="nav_keys">API Keys</span>
         <em class="nav-badge" id="nav-keys-count">0</em>
       </a>
       <a href="#logs" class="nav-item" data-tab="logs">
-        <i class="ti ti-chart-bar"></i> <span data-i18n="nav_logs">Logi API</span>
+        <i class="ti ti-chart-bar"></i> <span data-i18n="nav_logs">API Logs</span>
       </a>
 
       <span class="nav-label" data-i18n="nav_label_system">System</span>
       <a href="#connect" class="nav-item" data-tab="connect">
-        <i class="ti ti-plug"></i> <span data-i18n="nav_connect">Połączenie</span>
+        <i class="ti ti-plug"></i> <span data-i18n="nav_connect">Connection</span>
       </a>
       <a href="#settings" class="nav-item" data-tab="settings">
-        <i class="ti ti-settings"></i> <span data-i18n="nav_settings">Ustawienia</span>
+        <i class="ti ti-settings"></i> <span data-i18n="nav_settings">Settings</span>
       </a>
     </nav>
 
@@ -59,11 +57,11 @@
       <div class="conn" id="conn">
         <span class="conn-dot" id="status-indicator"></span>
         <div class="conn-text">
-          <strong id="status-text" data-i18n="status_connecting">Łączenie…</strong>
+          <strong id="status-text" data-i18n="status_connecting">Connecting…</strong>
           <small id="status-sub">—</small>
         </div>
       </div>
-      <button class="theme-toggle" id="theme-toggle" aria-label="Zmień motyw">
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
         <i class="ti ti-sun" id="theme-icon"></i>
         <span id="theme-label">Light</span>
       </button>
@@ -75,7 +73,7 @@
   <!-- ============ MAIN ============ -->
   <main class="main">
     <header class="topbar">
-      <button class="icon-btn only-mobile" id="sidebar-open" aria-label="Otwórz menu">
+      <button class="icon-btn only-mobile" id="sidebar-open" aria-label="Open menu">
         <i class="ti ti-menu-2"></i>
       </button>
       <div class="topbar-title">
@@ -83,10 +81,10 @@
         <p id="page-sub"></p>
       </div>
       <div class="topbar-actions">
-        <a class="btn btn-ghost" id="open-docs" href="/docs" target="_blank" rel="noopener">
+        <a class="btn btn-ghost btn-sm" id="open-docs" href="/docs" target="_blank" rel="noopener">
           <i class="ti ti-api"></i> <span data-i18n="topbar_api">API</span>
         </a>
-        <button class="btn btn-ghost" id="refresh-now" data-tip="Odśwież">
+        <button class="btn btn-ghost btn-sm" id="refresh-now" aria-label="Refresh">
           <i class="ti ti-refresh"></i>
         </button>
       </div>
@@ -96,95 +94,76 @@
 
       <!-- ---------- HOME ---------- -->
       <section class="panel is-active" id="home">
-        <div class="hero reveal">
-          <div class="hero-glow" aria-hidden="true"></div>
-          <div class="hero-mark"><i class="ti ti-terminal-2"></i></div>
-          <div class="hero-body">
+        <div class="app-head">
+          <div class="brand-mark"><i class="ti ti-terminal-2"></i></div>
+          <div>
             <h2>LocalLLMAPI</h2>
-            <p data-i18n="home_hero_text">
-              Lokalny router zgodny z OpenAI. Modele ładowane na GPU z automatycznym
-              zwalnianiem pamięci i pełnym logowaniem zużycia.
-            </p>
-            <div class="hero-tags">
-              <span class="tag"><i class="ti ti-plug"></i><span data-i18n="conn_desc_short">OpenAI compatible</span></span>
-              <span class="tag"><i class="ti ti-cpu-2"></i><span data-i18n="tag_vulkan">Vulkan / CUDA / CPU</span></span>
-              <span class="tag"><i class="ti ti-clock-hour-4"></i><span data-i18n="tag_unload">Auto-unload 2 min</span></span>
-            </div>
+            <p data-i18n="home_headline">OpenAI-compatible router running entirely on this machine.</p>
           </div>
-          <div class="hero-code" aria-hidden="true">
-            <div class="hc-line"><span class="hc-p">$</span> pip install openai</div>
-            <div class="hc-line"><span class="hc-p">$</span> <span class="hc-dim"># serwer działa na porcie</span> <b id="hero-port">1000</b></div>
+          <div class="app-tags">
+            <span class="tag"><i class="ti ti-plug"></i><span data-i18n="tag_compat">OpenAI compatible</span></span>
+            <span class="tag"><i class="ti ti-cpu-2"></i><span data-i18n="tag_vulkan">Vulkan / CUDA / CPU</span></span>
+            <span class="tag"><i class="ti ti-clock-hour-4"></i><span data-i18n="tag_unload">Unload after 2 min</span></span>
           </div>
         </div>
 
         <div class="stat-grid" id="stat-grid">
-          <article class="stat reveal" data-stat="last_model" data-tip="Ostatni model użyty w API">
-            <div class="stat-head"><span class="stat-ic ic-purple"><i class="ti ti-cpu-2"></i></span></div>
+          <article class="stat">
+            <div class="stat-label"><i class="ti ti-cpu-2"></i><span data-i18n="stat_last_model">Last used model</span></div>
             <div class="stat-val stat-text" id="s-last-model">—</div>
-            <div class="stat-key" data-i18n="stat_last_model">Ostatnio używany model</div>
             <div class="stat-sub" id="s-last-model-sub">—</div>
           </article>
-
-          <article class="stat reveal" data-tip="Łącznie tokenów w całej historii">
-            <div class="stat-head"><span class="stat-ic ic-blue"><i class="ti ti-coins"></i></span></div>
+          <article class="stat">
+            <div class="stat-label"><i class="ti ti-coins"></i><span data-i18n="stat_tokens">Tokens used</span></div>
             <div class="stat-val" id="s-tokens">0</div>
-            <div class="stat-key" data-i18n="stat_tokens">Zużyte tokeny</div>
             <div class="stat-sub" id="s-tokens-sub">—</div>
           </article>
-
-          <article class="stat reveal" data-tip="Wszystkie requesty od startu serwera">
-            <div class="stat-head"><span class="stat-ic ic-cyan"><i class="ti ti-activity"></i></span></div>
+          <article class="stat">
+            <div class="stat-label"><i class="ti ti-activity"></i><span data-i18n="stat_requests">Requests</span></div>
             <div class="stat-val" id="s-requests">0</div>
-            <div class="stat-key" data-i18n="stat_requests">Requesty</div>
             <div class="stat-sub" id="s-requests-sub">—</div>
           </article>
-
-          <article class="stat reveal" data-tip="Średnia i najlepsza prędkość tokenów">
-            <div class="stat-head"><span class="stat-ic ic-green"><i class="ti ti-gauge"></i></span></div>
-            <div class="stat-val" id="s-tps"><span id="s-tps-n">0</span><small>t/s</small></div>
-            <div class="stat-key" data-i18n="stat_tps">Średnia prędkość</div>
+          <article class="stat">
+            <div class="stat-label"><i class="ti ti-gauge"></i><span data-i18n="stat_tps">Average speed</span></div>
+            <div class="stat-val"><span id="s-tps-n">0</span><small>t/s</small></div>
             <div class="stat-sub" id="s-tps-sub">—</div>
           </article>
-
-          <article class="stat reveal" data-tip="Modele GGUF w katalogu models/">
-            <div class="stat-head"><span class="stat-ic ic-amber"><i class="ti ti-stack-2"></i></span></div>
+          <article class="stat">
+            <div class="stat-label"><i class="ti ti-stack-2"></i><span data-i18n="stat_models">Models on disk</span></div>
             <div class="stat-val" id="s-models">0</div>
-            <div class="stat-key" data-i18n="stat_models">Modele na dysku</div>
             <div class="stat-sub" id="s-models-sub">—</div>
           </article>
-
-          <article class="stat reveal" data-tip="Czas pracy procesu serwera">
-            <div class="stat-head"><span class="stat-ic ic-pink"><i class="ti ti-heartbeat"></i></span></div>
+          <article class="stat">
+            <div class="stat-label"><i class="ti ti-clock"></i><span data-i18n="stat_uptime">Uptime</span></div>
             <div class="stat-val" id="s-uptime">—</div>
-            <div class="stat-key" data-i18n="stat_uptime">Czas działania</div>
             <div class="stat-sub" id="s-uptime-sub">—</div>
           </article>
         </div>
 
-        <div class="card reveal">
+        <div class="card">
           <div class="card-head">
-            <h3><i class="ti ti-server"></i> <span data-i18n="home_loaded_title">Załadowane modele</span></h3>
+            <h3><i class="ti ti-stack-2"></i> <span data-i18n="home_slots_title">Slots</span></h3>
             <span class="chip" id="slots-chip">—</span>
           </div>
           <div class="slot-track" id="slot-track"></div>
-          <div class="model-chips" id="home-loaded"></div>
+          <div class="card-body" id="home-loaded"></div>
         </div>
 
-        <div class="card reveal">
+        <div class="card">
           <div class="card-head">
-            <h3><i class="ti ti-history"></i> <span data-i18n="home_recent_title">Ostatnie requesty</span></h3>
-            <a class="btn btn-ghost btn-sm" href="#logs" data-goto="logs">
-              <span data-i18n="home_see_all">Zobacz wszystkie</span> <i class="ti ti-arrow-narrow-right"></i>
-            </a>
+            <h3><i class="ti ti-history"></i> <span data-i18n="home_recent_title">Recent requests</span></h3>
+            <button class="btn btn-ghost btn-sm" data-goto="logs">
+              <span data-i18n="home_see_all">See all</span> <i class="ti ti-arrow-narrow-right"></i>
+            </button>
           </div>
           <div class="table-wrap">
-            <table class="tbl" id="recent-table">
+            <table class="tbl">
               <thead><tr>
-                <th data-i18n="th_time">Czas</th>
+                <th data-i18n="th_time">Time</th>
                 <th data-i18n="th_model_id">Model</th>
-                <th data-i18n="th_key_name">Klucz</th>
-                <th class="num" data-i18n="th_tokens">Tokeny</th>
-                <th class="num" data-i18n="th_time_s">Czas (s)</th>
+                <th data-i18n="th_key_name">Key</th>
+                <th class="num" data-i18n="th_tokens">Tokens</th>
+                <th class="num" data-i18n="th_time_s">Time (s)</th>
                 <th class="num" data-i18n="th_tps_short">t/s</th>
               </tr></thead>
               <tbody id="recent-tbody"></tbody>
@@ -195,66 +174,69 @@
 
       <!-- ---------- MODELS ---------- -->
       <section class="panel" id="models">
-        <div class="active-model reveal">
-          <span class="label" data-i18n="models_active_label">Wczytany w pamięci:</span>
-          <span class="value" id="active-model-name" data-i18n="models_none">Brak</span>
+        <div class="active-model">
+          <span class="label" data-i18n="models_active_label">Loaded in memory:</span>
+          <span class="value" id="active-model-name" data-i18n="models_none">None</span>
         </div>
         <div class="models-grid" id="models-list"></div>
       </section>
 
       <!-- ---------- KEYS ---------- -->
       <section class="panel" id="keys">
-        <div class="card reveal">
+        <div class="card">
           <div class="card-head">
-            <h3><i class="ti ti-key"></i> <span data-i18n="keys_create_title">Nowy klucz</span></h3>
+            <h3><i class="ti ti-key"></i> <span data-i18n="keys_create_title">New key</span></h3>
           </div>
-          <div class="key-form">
+          <div class="card-body key-form">
             <div class="field">
-              <label data-i18n="keys_name_label">Nazwa</label>
-              <input type="text" id="new-key-name" data-i18n-placeholder="keys_name_placeholder" placeholder="Mój Projekt" autocomplete="off">
+              <label for="new-key-name" data-i18n="keys_name_label">Name</label>
+              <input type="text" id="new-key-name" data-i18n-placeholder="keys_name_placeholder" placeholder="My Project" autocomplete="off">
             </div>
             <div class="field">
-              <label data-i18n="keys_val_label">Wartość klucza</label>
+              <label for="new-key-value" data-i18n="keys_val_label">Key value</label>
               <div class="gen-row">
-                <input type="text" id="new-key-value" data-i18n-placeholder="keys_val_placeholder" placeholder="sk-moje-api-123" autocomplete="off">
-                <button class="btn btn-ghost btn-icon" id="gen-key" data-tip="Wygeneruj losowy klucz" type="button"><i class="ti ti-wand"></i></button>
+                <input type="text" id="new-key-value" data-i18n-placeholder="keys_val_placeholder" placeholder="sk-my-api-123" autocomplete="off">
+                <button class="btn btn-icon" id="gen-key" aria-label="Generate a random key" type="button"><i class="ti ti-wand"></i></button>
               </div>
             </div>
             <div class="field">
-              <label data-i18n="keys_engine_label">Silnik</label>
+              <label for="new-key-engine" data-i18n="keys_engine_label">Engine</label>
               <select id="new-key-engine">
                 <option value="vulkan">Vulkan</option>
                 <option value="cuda">CUDA</option>
                 <option value="cpu">CPU</option>
               </select>
             </div>
-            <button class="btn btn-primary" id="create-key-btn">
-              <i class="ti ti-plus"></i> <span data-i18n="keys_create_btn">Utwórz</span>
-            </button>
+            <div class="field">
+              <span aria-hidden="true">&nbsp;</span>
+              <button class="btn btn-primary" id="create-key-btn">
+                <i class="ti ti-plus"></i> <span data-i18n="keys_create_btn">Create</span>
+              </button>
+            </div>
           </div>
           <div class="form-msg" id="key-error"></div>
         </div>
 
-        <div class="card reveal">
+        <div class="card">
           <div class="card-head">
-            <h3><i class="ti ti-list-details"></i> <span data-i18n="keys_list_title">Twoje klucze</span></h3>
+            <h3><i class="ti ti-list-details"></i> <span data-i18n="keys_list_title">Your keys</span></h3>
             <span class="chip" id="keys-count-chip">0</span>
           </div>
           <div class="table-wrap">
-            <table class="tbl tbl-keys">
+            <table class="tbl">
               <thead><tr>
-                <th data-i18n="th_name">Nazwa</th>
-                <th data-i18n="th_engine">Silnik</th>
-                <th data-i18n="th_last_used">Ostatnio użyty</th>
-                <th class="num" data-i18n="th_usage">Tokeny</th>
-                <th class="num" data-i18n="th_actions">Akcje</th>
+                <th data-i18n="th_name">Name</th>
+                <th data-i18n="th_engine">Engine</th>
+                <th data-i18n="th_last_used">Last used</th>
+                <th class="num" data-i18n="th_usage">Tokens</th>
+                <th class="num" data-i18n="th_actions">Actions</th>
               </tr></thead>
               <tbody id="keys-list"></tbody>
             </table>
           </div>
           <div class="empty" id="keys-empty" hidden>
             <i class="ti ti-key-off"></i>
-            <p data-i18n="keys_empty">Brak kluczy. Utwórz pierwszy powyżej.</p>
+            <p data-i18n="keys_empty">No keys yet. Create the first one above.</p>
           </div>
         </div>
       </section>
@@ -262,56 +244,76 @@
       <!-- ---------- LOGS ---------- -->
       <section class="panel" id="logs">
         <div id="log-keys-view">
-          <div class="keys-grid" id="log-keys-grid"></div>
+          <div class="card" id="log-keys-card">
+            <div class="card-head">
+              <h3><i class="ti ti-key"></i> <span data-i18n="logs_pick_key">Select a key</span></h3>
+            </div>
+            <div class="keys-grid" id="log-keys-grid"></div>
+          </div>
           <div class="empty" id="no-keys-msg" hidden>
-            <i class="ti ti-chart-bar-off"></i>
-            <p data-i18n="logs_no_keys">Brak kluczy. Wygeneruj je w zakładce Klucze API.</p>
-            <button class="btn btn-ghost" data-goto="keys"><i class="ti ti-arrow-left"></i> <span data-i18n="logs_go_keys">Przejdź do kluczy</span></button>
+            <i class="ti ti-key-off"></i>
+            <p data-i18n="logs_no_keys">No keys available. Create one in the API Keys tab.</p>
+            <button class="btn" data-goto="keys"><i class="ti ti-arrow-left"></i> <span data-i18n="logs_go_keys">Go to keys</span></button>
           </div>
         </div>
 
         <div id="key-details" hidden>
-          <button class="btn btn-ghost" id="logs-back">
-            <i class="ti ti-arrow-left"></i> <span data-i18n="logs_back">Wróć do wyboru klucza</span>
-          </button>
-          <h2 class="detail-title" id="key-details-title"></h2>
-
-          <div class="stat-grid stat-grid-4">
-            <article class="stat reveal"><div class="stat-head"><span class="stat-ic ic-purple"><i class="ti ti-coins"></i></span></div>
-              <div class="stat-val" id="lg-tokens">0</div><div class="stat-key" data-i18n="stat_tokens">Tokeny</div></article>
-            <article class="stat reveal"><div class="stat-head"><span class="stat-ic ic-cyan"><i class="ti ti-activity"></i></span></div>
-              <div class="stat-val" id="lg-requests">0</div><div class="stat-key" data-i18n="stat_requests">Requesty</div></article>
-            <article class="stat reveal"><div class="stat-head"><span class="stat-ic ic-green"><i class="ti ti-gauge"></i></span></div>
-              <div class="stat-val"><span id="lg-avg">0</span><small>t/s</small></div><div class="stat-key" data-i18n="stat_avg_tps">Średnia</div></article>
-            <article class="stat reveal"><div class="stat-head"><span class="stat-ic ic-amber"><i class="ti ti-bolt"></i></span></div>
-              <div class="stat-val"><span id="lg-best">0</span><small>t/s</small></div><div class="stat-key" data-i18n="stat_best_tps">Rekord</div></article>
+          <div class="card">
+            <div class="card-head">
+              <button class="btn btn-ghost btn-sm" id="logs-back">
+                <i class="ti ti-arrow-left"></i> <span data-i18n="logs_back">All keys</span>
+              </button>
+              <h3 id="key-details-title" style="justify-content:flex-end"></h3>
+            </div>
           </div>
 
-          <div class="card reveal">
-            <div class="card-head"><h3><i class="ti ti-chart-bar"></i> <span data-i18n="logs_chart_title">Tokeny w ostatnich 24h</span></h3></div>
+          <div class="stat-grid">
+            <article class="stat">
+              <div class="stat-label"><i class="ti ti-coins"></i><span data-i18n="stat_tokens">Tokens</span></div>
+              <div class="stat-val" id="lg-tokens">0</div>
+            </article>
+            <article class="stat">
+              <div class="stat-label"><i class="ti ti-activity"></i><span data-i18n="stat_requests">Requests</span></div>
+              <div class="stat-val" id="lg-requests">0</div>
+            </article>
+            <article class="stat">
+              <div class="stat-label"><i class="ti ti-gauge"></i><span data-i18n="stat_avg_tps">Average</span></div>
+              <div class="stat-val"><span id="lg-avg">0</span><small>t/s</small></div>
+            </article>
+            <article class="stat">
+              <div class="stat-label"><i class="ti ti-bolt"></i><span data-i18n="stat_best_tps">Best</span></div>
+              <div class="stat-val"><span id="lg-best">0</span><small>t/s</small></div>
+            </article>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3><i class="ti ti-chart-bar"></i> <span data-i18n="logs_chart_title">Tokens, last 24 hours</span></h3>
+            </div>
             <div class="chart-box"><canvas id="usageChart"></canvas></div>
           </div>
 
-          <div class="card reveal">
-            <div class="card-head"><h3><i class="ti ti-list-search"></i> <span data-i18n="logs_history_title">Historia zapytań</span></h3>
-              <input type="search" class="search" id="log-search" data-i18n-placeholder="js_search" placeholder="Szukaj modelu…">
+          <div class="card">
+            <div class="card-head">
+              <h3><i class="ti ti-list-search"></i> <span data-i18n="logs_history_title">Query history</span></h3>
+              <input type="search" class="search" id="log-search" style="width:200px" data-i18n-placeholder="js_search" placeholder="Search model…">
             </div>
             <div class="table-wrap" id="logs-table-wrap">
               <table class="tbl">
                 <thead><tr>
-                  <th data-i18n="th_time">Czas</th>
+                  <th data-i18n="th_time">Time</th>
                   <th data-i18n="th_model_id">Model</th>
-                  <th class="num" data-i18n="th_time_s">Czas (s)</th>
+                  <th class="num" data-i18n="th_time_s">Time (s)</th>
                   <th class="num" data-i18n="th_ttft">TTFT (s)</th>
-                  <th class="num" data-i18n="th_tokens">Tokeny</th>
-                  <th class="num" data-i18n="th_tps">t/s (śr / min / max)</th>
+                  <th class="num" data-i18n="th_tokens">Tokens</th>
+                  <th class="num" data-i18n="th_tps">t/s (avg / min / max)</th>
                 </tr></thead>
                 <tbody id="logs-tbody"></tbody>
               </table>
             </div>
             <div class="empty" id="logs-empty" hidden>
               <i class="ti ti-inbox"></i>
-              <p data-i18n="js_no_queries">Brak zapytań dla tego klucza</p>
+              <p data-i18n="js_no_queries">No requests for this key</p>
             </div>
           </div>
         </div>
@@ -319,10 +321,10 @@
 
       <!-- ---------- CONNECT ---------- -->
       <section class="panel" id="connect">
-        <div class="endpoints reveal" id="endpoints"></div>
-        <div class="card reveal">
+        <div class="endpoints" id="endpoints"></div>
+        <div class="card">
           <div class="card-head">
-            <h3><i class="ti ti-code"></i> <span data-i18n="conn_title">Jak się połączyć?</span></h3>
+            <h3><i class="ti ti-code"></i> <span data-i18n="conn_title">How to connect</span></h3>
             <div class="tabs" id="code-tabs">
               <button class="tab is-active" data-lang="python">Python</button>
               <button class="tab" data-lang="curl">cURL</button>
@@ -331,37 +333,38 @@
           </div>
           <div class="code-head">
             <span id="code-file">example.py</span>
-            <button class="btn btn-ghost btn-sm" id="copy-code"><i class="ti ti-copy"></i> <span data-i18n="conn_copy">Kopiuj</span></button>
+            <button class="btn btn-ghost btn-sm" id="copy-code"><i class="ti ti-copy"></i> <span data-i18n="conn_copy">Copy</span></button>
           </div>
           <pre class="code" id="connection-code"></pre>
         </div>
-        <div class="info reveal">
+        <div class="info">
           <i class="ti ti-info-circle"></i>
-          <div data-i18n="conn_tip">Podaj dokładną nazwę modelu z zakładki Modele i poprawny klucz z zakładki Klucze API.</div>
+          <div data-i18n="conn_tip">Use the exact model name from the <b>Models</b> tab and a valid key from the <b>API Keys</b> tab.</div>
         </div>
       </section>
 
       <!-- ---------- SETTINGS ---------- -->
       <section class="panel" id="settings">
-        <div class="card reveal">
-          <div class="card-head"><h3><i class="ti ti-stack-2"></i> <span data-i18n="settings_slots_title">Sloty modeli</span></h3></div>
-          <p class="card-desc" data-i18n="settings_slots_desc">Każdy slot ma własne urządzenie. Model trafia do slotu pasującego do silnika klucza API.</p>
-          <div id="slots-container" class="slots"></div>
+        <div class="card">
+          <div class="card-head"><h3><i class="ti ti-stack-2"></i> <span data-i18n="settings_slots_title">Model slots</span></h3></div>
+          <p class="card-desc" data-i18n="settings_slots_desc">Each slot has its own device. A model is placed in the slot matching the API key engine.</p>
+          <div class="slots" id="slots-container"></div>
         </div>
 
-        <div class="card reveal">
-          <div class="card-head"><h3><i class="ti ti-language"></i> <span data-i18n="settings_lang">Język</span></h3></div>
-          <div class="lang-row">
-            <button class="lang-btn" data-lang="pl"><i class="ti ti-flag-3"></i> Polski</button>
+        <div class="card">
+          <div class="card-head"><h3><i class="ti ti-language"></i> <span data-i18n="settings_lang">Language</span></h3></div>
+          <div class="card-body lang-row">
             <button class="lang-btn" data-lang="en"><i class="ti ti-flag-3"></i> English</button>
+            <button class="lang-btn" data-lang="pl"><i class="ti ti-flag-3"></i> Polski</button>
           </div>
         </div>
 
-        <div class="card reveal">
-          <div class="card-head"><h3><i class="ti ti-cpu-2"></i> <span data-i18n="settings_loaded_title">Załadowane modele</span></h3>
-            <button class="btn btn-ghost btn-sm" id="unload-all"><i class="ti ti-trash"></i> <span data-i18n="settings_unload_all">Zwolnij wszystkie</span></button>
+        <div class="card">
+          <div class="card-head">
+            <h3><i class="ti ti-cpu-2"></i> <span data-i18n="settings_loaded_title">Loaded models</span></h3>
+            <button class="btn btn-ghost btn-sm" id="unload-all"><i class="ti ti-trash"></i> <span data-i18n="settings_unload_all">Unload all</span></button>
           </div>
-          <div id="loaded-models-container"></div>
+          <div class="slots" id="loaded-models-container"></div>
         </div>
       </section>
 
@@ -369,21 +372,26 @@
   </main>
 </div>
 
-<!-- ============ MODAL ============ -->
+<!-- ============ MODALS ============ -->
 <div class="modal" id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
   <div class="modal-card" role="document">
     <div class="modal-head">
-      <h3 id="modal-title"><i class="ti ti-pencil"></i> <span data-i18n="modal_edit_title">Edytuj klucz API</span></h3>
-      <button class="icon-btn" id="modal-x" aria-label="Zamknij"><i class="ti ti-x"></i></button>
+      <h3 id="modal-title"><i class="ti ti-pencil"></i> <span data-i18n="modal_edit_title">Edit API key</span></h3>
+      <button class="icon-btn" id="modal-x" aria-label="Close"><i class="ti ti-x"></i></button>
     </div>
-    <div class="field"><label data-i18n="modal_key_name">Nazwa klucza</label><input type="text" id="edit-key-input"></div>
-    <div class="field"><label data-i18n="modal_key_val">Wartość klucza</label>
+    <div class="field">
+      <label for="edit-key-input" data-i18n="modal_key_name">Key name</label>
+      <input type="text" id="edit-key-input">
+    </div>
+    <div class="field">
+      <label for="edit-key-value-input" data-i18n="modal_key_val">Key value</label>
       <div class="gen-row">
         <input type="text" id="edit-key-value-input">
-        <button class="btn btn-ghost btn-icon" id="edit-gen-key" data-tip="Wygeneruj losowy klucz" type="button"><i class="ti ti-wand"></i></button>
+        <button class="btn btn-icon" id="edit-gen-key" aria-label="Generate a random key" type="button"><i class="ti ti-wand"></i></button>
       </div>
     </div>
-    <div class="field"><label data-i18n="modal_engine">Silnik</label>
+    <div class="field">
+      <label for="edit-key-engine-input" data-i18n="modal_engine">Engine</label>
       <select id="edit-key-engine-input">
         <option value="vulkan">Vulkan</option>
         <option value="cuda">CUDA</option>
@@ -391,21 +399,21 @@
       </select>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" id="modal-cancel" data-i18n="modal_cancel">Anuluj</button>
-      <button class="btn btn-primary" id="modal-save"><i class="ti ti-device-floppy"></i> <span data-i18n="modal_save">Zapisz</span></button>
+      <button class="btn" id="modal-cancel" data-i18n="modal_cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-save"><i class="ti ti-device-floppy"></i> <span data-i18n="modal_save">Save</span></button>
     </div>
   </div>
 </div>
 
-<div class="modal" id="confirm-modal" role="dialog" aria-modal="true" hidden>
+<div class="modal" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
   <div class="modal-card modal-sm" role="document">
     <div class="modal-head">
-      <h3><i class="ti ti-alert-triangle"></i> <span data-i18n="confirm_title">Potwierdź</span></h3>
+      <h3 id="confirm-title"><i class="ti ti-alert-triangle"></i> <span data-i18n="confirm_title">Confirm</span></h3>
     </div>
     <p id="confirm-text"></p>
     <div class="modal-actions">
-      <button class="btn btn-ghost" id="confirm-no" data-i18n="modal_cancel">Anuluj</button>
-      <button class="btn btn-danger" id="confirm-yes" data-i18n="confirm_yes">Usuń</button>
+      <button class="btn" id="confirm-no" data-i18n="modal_cancel">Cancel</button>
+      <button class="btn btn-danger" id="confirm-yes" data-i18n="confirm_yes">Delete</button>
     </div>
   </div>
 </div>
@@ -413,7 +421,7 @@
 <div class="toasts" id="toasts"></div>
 
 <script src="vendor/chart.umd.js"></script>
-<script src="i18n.js?v=30"></script>
-<script src="script.js?v=30"></script>
+<script src="i18n.js?v=40"></script>
+<script src="script.js?v=40"></script>
 </body>
 </html>
