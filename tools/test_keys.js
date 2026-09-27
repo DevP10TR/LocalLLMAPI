@@ -443,6 +443,74 @@ const byText = (sel, text) => $$(sel).find((n) => n.textContent.trim().toLowerCa
   check('body overflow przywrocone po ESC', doc.body.style.overflow === '',
     `"${doc.body.style.overflow}"`);
 
+  // ZWIJANIE PASKA (rail) - desktop
+  console.log('\n[15] Zwijanie paska do ikon');
+  const app = $('.app');
+  const railBtn = $('#nav-toggle');
+  const cs = (s) => window.getComputedStyle($(s));
+
+  check('toggle widoczny na desktopie', cs('#nav-toggle').display !== 'none',
+    `display=${cs('#nav-toggle').display}`);
+  check('pasek startuje rozwiniety', !app.classList.contains('is-rail'));
+  // jsdom nie rozwiązuje var() w grid-template-columns, więc sprawdzamy
+  // KTÓRA zmienna jest użyta — to jednoznacznie dowodzi zmiany szerokości.
+  const railVar = () => (cs('.app').gridTemplateColumns.match(/--([a-z]+-w)/) || [])[1];
+  check('pasek startuje rozwiniety (grid uzywa --sidebar-w)', railVar() === 'sidebar-w',
+    cs('.app').gridTemplateColumns);
+  check('--rail-w mniejszy niz --sidebar-w (z CSS)',
+    parseInt(read('web/style.css').match(/--rail-w:\s*(\d+)px/)[1], 10) <
+    parseInt(read('web/style.css').match(/--sidebar-w:\s*(\d+)px/)[1], 10));
+
+  railBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await sleep(300);
+  check('klik zwija pasek do ikon', app.classList.contains('is-rail'));
+  check('kolumna zwiezona (grid uzywa --rail-w)', railVar() === 'rail-w',
+    cs('.app').gridTemplateColumns);
+  check('etykiety nawigacji ukryte',
+    cs('.nav-item[data-tab="home"] span').display === 'none');
+  check('nazwa produktu ukryta', cs('.brand-text').display === 'none');
+  check('etykiety sekcji ukryte', cs('.nav-label').display === 'none');
+  check('licznik kluczy ukryty', cs('.nav-badge').display === 'none');
+  check('ikony nawigacji NADAL widoczne',
+    cs('.nav-item[data-tab="home"] i').display !== 'none');
+  check('logo NADAL widoczne', cs('.brand-mark').display !== 'none');
+  check('kropka statusu NADAL widoczna', cs('#status-indicator').display !== 'none');
+  check('przycisk motywu NADAL widoczny', cs('#theme-toggle').display !== 'none');
+  check('toggle ukryty w railu (brak miejsca)', cs('#nav-toggle').display === 'none');
+  check('aria-expanded = false', railBtn.getAttribute('aria-expanded') === 'false',
+    railBtn.getAttribute('aria-expanded'));
+  check('stan zapisany w localStorage', window.localStorage.getItem('llmapi.rail') === '1',
+    window.localStorage.getItem('llmapi.rail'));
+  check('ikona toggle odwrocona', /180deg|matrix\(-1/.test(cs('#nav-toggle-icon').transform),
+    cs('#nav-toggle-icon').transform);
+
+  $('.nav-item[data-tab="settings"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await sleep(400);
+  check('nawigacja dziala w railu',
+    cs('#settings').display !== 'none' && cs('#home').display === 'none');
+  check('pasek zostaje zwiniety po zmianie zakladki', app.classList.contains('is-rail'));
+
+  $('.nav-item[data-tab="home"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await sleep(300);
+  doc.dispatchEvent(new window.KeyboardEvent('keydown',
+    { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }));
+  await sleep(300);
+  check('Ctrl+B rozwija pasek', !app.classList.contains('is-rail'));
+  check('grid wracal do --sidebar-w', railVar() === 'sidebar-w',
+    cs('.app').gridTemplateColumns);
+  check('etykiety wracaja', cs('.nav-item[data-tab="home"] span').display !== 'none');
+  check('toggle wraca do widocznosci', cs('#nav-toggle').display !== 'none');
+  check('localStorage zresetowany', window.localStorage.getItem('llmapi.rail') === '0',
+    window.localStorage.getItem('llmapi.rail'));
+
+  railBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await sleep(250);
+  check('drugi klik zwija ponownie', app.classList.contains('is-rail'));
+  railBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await sleep(250);
+  check('trzeci klik rozwija', !app.classList.contains('is-rail'));
+  check('przycisk nigdy nie zostaje martwy', cs('#nav-toggle').display !== 'none');
+
   check('brak bledow JS po wszystkich kliknieciach', consoleErrors.length === 0,
     consoleErrors.slice(0, 3).join(' | '));
 

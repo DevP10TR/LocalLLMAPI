@@ -195,9 +195,44 @@ document.addEventListener('click', (e) => {
   if (goto) showTab(goto.dataset.goto);
 });
 
+const isMobile = () => window.matchMedia('(max-width: 820px)').matches;
+
+/* ---------- zwijanie paska (rail) ---------- */
+const NAV_KEY = 'llmapi.rail';
+
+const resizeChart = () => requestAnimationFrame(() => usageChart?.resize?.());
+
+function applyRail(collapsed, persist = true) {
+  $('.app').classList.toggle('is-rail', collapsed);
+  const btn = $('#nav-toggle');
+  btn.setAttribute('aria-expanded', String(!collapsed));
+  btn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  if (persist) {
+    try { localStorage.setItem(NAV_KEY, collapsed ? '1' : '0'); } catch { /* prywatny tryb */ }
+  }
+  resizeChart();
+}
+
+/* Jeden przycisk, dwa zachowania: na desktopie zwija do ikon,
+   na telefonie zamyka drawer. */
+function toggleNav() {
+  if (isMobile()) { document.body.classList.remove('nav-open'); return; }
+  applyRail(!$('.app').classList.contains('is-rail'));
+}
+
+$('#nav-toggle').addEventListener('click', toggleNav);
 $('#sidebar-open').addEventListener('click', () => document.body.classList.add('nav-open'));
-$('#sidebar-close').addEventListener('click', () => document.body.classList.remove('nav-open'));
 $('#scrim').addEventListener('click', () => document.body.classList.remove('nav-open'));
+
+/* Po powrocie do szerokiego okna drawer musi zniknac — inaczej zostalby
+   otwarty i zaslanial tresc. */
+const wideQuery = window.matchMedia('(min-width: 821px)');
+const onBreakpoint = (e) => {
+  if (e.matches) document.body.classList.remove('nav-open');
+  resizeChart();
+};
+if (wideQuery.addEventListener) wideQuery.addEventListener('change', onBreakpoint);
+else wideQuery.addListener(onBreakpoint);
 
 /* ---------- motyw ---------- */
 const THEME_KEY = 'llmapi.theme';
@@ -235,6 +270,12 @@ $('#modal-cancel').addEventListener('click', () => closeModal('edit-modal'));
 $('#modal-save').addEventListener('click', saveEditKey);
 
 document.addEventListener('keydown', (e) => {
+  // Ctrl/Cmd+B — zwijanie paska, jak w VS Code i Linear
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+    e.preventDefault();
+    toggleNav();
+    return;
+  }
   if (e.key === 'Escape') {
     const open = $$('.modal:not([hidden])').pop();
     if (open) { closeModal(open.id); return; }
@@ -1000,6 +1041,10 @@ const prefersLight = () => {
 
 function start() {
   applyTheme(localStorage.getItem(THEME_KEY) || (prefersLight() ? 'light' : 'dark'));
+
+  let stored = null;
+  try { stored = localStorage.getItem(NAV_KEY); } catch { /* prywatny tryb */ }
+  applyRail(stored === '1', false);
 
   $$('.lang-btn').forEach((b) => b.addEventListener('click', () => setLanguage(b.dataset.lang)));
 

@@ -76,6 +76,8 @@ function makeNode(id = '', tag = 'div') {
 
 /* Rejestrujemy wszystkie id wystepujace w HTML jako gotowe stuby. */
 const ids = [...new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]))];
+// .app nie ma id, ale jest wskazywane z JS.
+if (!ids.includes('app')) ids.push('app');
 const registry = new Map(ids.map((id) => [id, makeNode(id)]));
 
 const document = {
@@ -88,6 +90,7 @@ const document = {
   querySelector: (sel) => {
     const m = sel.match(/^#([\w-]+)$/);
     if (m) return registry.get(m[1]) || makeNode(m[1]);
+    if (sel === '.app') return registry.get('app') || makeNode('app');
     if (sel === '.panel.is-active') return makeNode('active-panel', 'section');
     if (sel === '.nav-item[data-tab="home"] span') { const n = makeNode('span'); n.textContent = 'Home'; return n; }
     return null;
@@ -163,7 +166,8 @@ for (const [name, re] of [
   ['animowane tlo (aurora)', /aurora|@keyframes\s+drift/i],
   ['gradientowy tekst', /background-clip:\s*text/],
   ['glassmorphism', /backdrop-filter/],
-  ['animowane liczniki', /countTo|requestAnimationFrame/],
+  ['animowane liczniki (countTo)', /countTo/],
+  ['requestAnimationFrame w petli nieskonczonej', /requestAnimationFrame\([^)]*\)[^;]*;\s*}\s*while/],
   ['shimmer dekoracja (nie skeleton)', /@keyframes\s+shimmer/],
   ['nieskonczona animacja tla', /@keyframes\s+drift|\.aurora/],
   ['pulsujaca kropka', /@keyframes\s+ping/],
