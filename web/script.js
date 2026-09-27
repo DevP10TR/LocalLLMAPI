@@ -82,24 +82,26 @@ async function api(path, options = {}) {
   return res.status === 204 ? null : res.json();
 }
 
-/* Schowek z fallbackiem — clipboard API nie działa po http:// (brak secure
-   context), a panel ma działać także pod adresem LAN. */
+/* Schowek: najpierw Clipboard API, potem execCommand.
+   Nie gate'ujemy tego przez isSecureContext — panel bywa otwarty z LAN po
+   http://, gdzie API nie istnieje i użytkownik dostawałby tylko błąd. */
 async function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try { await navigator.clipboard.writeText(text); return true; } catch { /* fallback */ }
+  }
   try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch { /* idziemy dalej */ }
-  try {
-    const ta = el('textarea', { style: 'position:fixed;top:-9999px;opacity:0' });
+    const ta = el('textarea', { style: 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0' });
     ta.value = text;
+    ta.setAttribute('readonly', '');
     document.body.append(ta);
     ta.select();
+    ta.setSelectionRange(0, text.length);
     const ok = document.execCommand('copy');
     ta.remove();
     return ok;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 const copyAndToast = (text) =>
@@ -518,13 +520,22 @@ $('#logs-back').addEventListener('click', backToKeyGrid);
 function applyChartTheme() {
   if (!usageChart) return;
   const cs = getComputedStyle(document.documentElement);
-  usageChart.options.scales.y.ticks.color = cs.getPropertyValue('--text-3');
-  usageChart.options.scales.x.ticks.color = cs.getPropertyValue('--text-3');
-  usageChart.options.scales.y.grid.color = 'rgba(127,127,140,.14)';
-  usageChart.options.plugins.tooltip.backgroundColor = cs.getPropertyValue('--bg-nav');
-  usageChart.options.plugins.tooltip.borderColor = cs.getPropertyValue('--border-2');
-  usageChart.options.plugins.tooltip.titleColor = cs.getPropertyValue('--text');
-  usageChart.options.plugins.tooltip.bodyColor = cs.getPropertyValue('--text-2');
+  const pick = (v) => cs.getPropertyValue(v).trim();
+
+  // Defensywnie: przyciski motywu muszą dzialac nawet jesli wykres
+  // nie ma jeszcze skali (albo inna wersja Chart.js nie da ticks/grid).
+  const opt = usageChart.options || {};
+  const scales = opt.scales || (opt.scales = {});
+  for (const axis of ['x', 'y']) {
+    const s = scales[axis] || (scales[axis] = {});
+    (s.ticks || (s.ticks = {})).color = pick('--text-3');
+    if (axis === 'y') (s.grid || (s.grid = {})).color = 'rgba(127,127,140,.14)';
+  }
+  const tip = (opt.plugins && opt.plugins.tooltip) || ((opt.plugins ||= {}).tooltip ||= {});
+  tip.backgroundColor = pick('--bg-nav');
+  tip.borderColor = pick('--border-2');
+  tip.titleColor = pick('--text');
+  tip.bodyColor = pick('--text-2');
   usageChart.update('none');
 }
 
@@ -836,6 +847,18 @@ function setStatus(isOnline, sub) {
   if (!isOnline) toast(t('js_err_conn'), 'err');
 }
 
+/* Adres LAN pojawia się dopiero po pierwszym /api/status. Bez tego endpointy
+   i snippety pokazywały 127.0.0.1 do następnego ticka pollingu (albo wcale,
+   gdy użytkownik siedział na innej zakładce). */
+let lastIp = null;
+function updateServerIp(ip) {
+  if (!ip || ip === lastIp) return;
+  lastIp = ip;
+  serverIp = ip;
+  renderEndpoints();
+  renderCode();
+}
+
 /* Interwał rośnie przy błędach, a gdy karta jest w tle — rzadziej. */
 function schedule() {
   clearTimeout(timer);
@@ -851,8 +874,8 @@ async function refresh(force = false) {
     const [status, models, keys] = await Promise.all([
       api('/api/status'), api('/v1/models'), api('/api/keys'),
     ]);
-    serverIp = status.local_ip;
-    setStatus(true, `${serverIp}:${status.port}`);
+    setStatus(true, `${status.local_ip}:${status.port}`);
+    updateServerIp(status.local_ip);
 
     const loadedNames = Object.keys(status.loaded_models || {});
     $s('active-model-name').textContent = loadedNames[0] || t('models_none');
@@ -881,16 +904,15 @@ async function poll() {
   try {
     if (currentTab === 'home') {
       const s = await api('/api/status');
-      serverIp = s.local_ip;
       setStatus(true, `${s.local_ip}:${s.port}`);
+      updateServerIp(s.local_ip);
       await loadStats();
     } else {
       const [status, keys] = await Promise.all([api('/api/status'), api('/api/keys')]);
-      serverIp = status.local_ip;
-      setStatus(true, `${serverIp}:${status.port}`);
+      setStatus(true, `${status.local_ip}:${status.port}`);
+      updateServerIp(status.local_ip);
       if (JSON.stringify(keys) !== JSON.stringify(keysCache)) renderKeys(keys);
       if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); }
-      if (currentTab === 'connect') { renderEndpoints(); renderCode(); }
       if (currentLogKey) await loadLogs();
     }
     failures = 0;
@@ -909,7 +931,6 @@ $('#refresh-now').addEventListener('click', async (e) => {
   await refresh(true);
   if (currentLogKey) await loadLogs();
   if (currentTab === 'settings') { loadSlots(); loadLoadedModels(); }
-  if (currentTab === 'connect') { renderEndpoints(); renderCode(); }
   btn.classList.remove('is-spinning');
 });
 
@@ -918,9 +939,14 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) poll
 /* ==========================================================================
    START
    ========================================================================== */
+/* matchMedia nie istnieje w starszych przegladarkach i niektorych webview —
+   panel musi dzialac mimo to. */
+const prefersLight = () => {
+  try { return window.matchMedia('(prefers-color-scheme: light)').matches; } catch { return false; }
+};
+
 function start() {
-  applyTheme(localStorage.getItem(THEME_KEY)
-    || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
+  applyTheme(localStorage.getItem(THEME_KEY) || (prefersLight() ? 'light' : 'dark'));
 
   $$('.lang-btn').forEach((b) => b.addEventListener('click', () => setLanguage(b.dataset.lang)));
 

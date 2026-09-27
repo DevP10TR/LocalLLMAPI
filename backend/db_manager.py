@@ -178,7 +178,7 @@ def create_api_key(name: str, api_key: str, engine: str = "vulkan") -> int:
         )
         return cur.lastrowid
     except sqlite3.IntegrityError:
-        raise ValueError("Taki klucz API już istnieje. Wymyśl inną, unikalną wartość.")
+        raise ValueError("This API key already exists. Pick a different, unique value.")
 
 
 def get_api_keys_stats() -> List[Dict[str, Any]]:

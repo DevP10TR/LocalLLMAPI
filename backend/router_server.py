@@ -183,8 +183,7 @@ async def _acquire_slot(requested_engine: str) -> tuple:
         if not candidates:
             raise HTTPException(
                 status_code=503,
-                detail="Wszystkie sloty są zajęte przez aktywne requesty. "
-                "Spróbuj ponownie za chwilę.",
+                detail="All slots are busy with active requests. Try again shortly.",
             )
 
         _, evict_name = min(candidates)
@@ -433,13 +432,13 @@ def friendly_error(exc: BaseException) -> str:
     if isinstance(exc, MemoryError) or any(
         w in msg for w in ("memory", "vram", "allocation", "out of memory")
     ):
-        return "Przepełnienie pamięci GPU — model jest za duży na ten sprzęt."
+        return "GPU memory exhausted — the model is too large for this hardware."
     if isinstance(exc, FileNotFoundError) or "no such file" in msg:
-        return "Nie znaleziono pliku modelu w katalogu models/."
+        return "Model file not found in models/."
     if "context window" in msg or "context length" in msg:
-        return "Przekroczono okno kontekstu — serwer powiększa je i spróbuj ponownie."
+        return "Context window exceeded — the server is growing it, please retry."
     if "json" in msg or "decode" in msg:
-        return "Nieprawidłowy format danych wejściowych."
+        return "Malformed request payload."
     return f"{type(exc).__name__}: {str(exc)[:180]}"
 
 
@@ -531,7 +530,8 @@ def get_current_api_key(
     key_id = get_api_key_by_value(credentials.credentials)
     if not key_id:
         raise HTTPException(
-            status_code=401, detail="Nieprawidłowy klucz API. Utwórz go w zakładce Klucze API."
+            status_code=401,
+            detail="Invalid API key. Create one in the API Keys tab.",
         )
     return key_id
 
@@ -541,7 +541,7 @@ async def chat_completions(
     request: ChatCompletionRequest, api_key_id: int = Depends(get_current_api_key)
 ):
     if not request.model:
-        raise HTTPException(status_code=400, detail="Brak pola 'model'.")
+        raise HTTPException(status_code=400, detail="Missing the 'model' field.")
 
     api_engine = await asyncio.to_thread(get_engine_for_key, api_key_id)
     start_time = time.time()
@@ -688,7 +688,7 @@ class CreateKeyRequest(BaseModel):
 @app.post("/api/keys")
 async def create_new_key(req: CreateKeyRequest):
     if not req.name or not req.api_key:
-        raise HTTPException(status_code=400, detail="Pola 'name' i 'api_key' są wymagane.")
+        raise HTTPException(status_code=400, detail="Fields 'name' and 'api_key' are required.")
     try:
         key_id = await asyncio.to_thread(create_api_key, req.name, req.api_key, req.engine)
     except ValueError as e:
@@ -710,7 +710,7 @@ class UpdateKeyRequest(BaseModel):
 @app.put("/api/keys/{api_key_id}")
 async def update_key(api_key_id: int, req: UpdateKeyRequest):
     if not req.name:
-        raise HTTPException(status_code=400, detail="Nazwa jest wymagana.")
+        raise HTTPException(status_code=400, detail="Name is required.")
     await asyncio.to_thread(update_api_key, api_key_id, req.name, req.api_key, req.engine)
     return {"status": "ok"}
 
@@ -732,12 +732,12 @@ async def unload_all(model_name: Optional[str] = None):
         ok = await unload_model(model_name)
         return {
             "status": "ok",
-            "message": f"Model {model_name} {'zwolniony' if ok else 'nie jest załadowany'}",
+            "message": f"Model {model_name} {'unloaded' if ok else 'was not loaded'}",
         }
     free = [m["name"] for m in snapshot_models() if m["refcount"] <= 0]
     for n in free:
         await unload_model(n)
-    return {"status": "ok", "message": "Wszystkie nieużywane modele zwolnione"}
+    return {"status": "ok", "message": "All unused models unloaded"}
 
 
 @app.get("/api/status")
@@ -792,9 +792,9 @@ class SlotUpdateRequest(BaseModel):
 @app.put("/api/settings/slots")
 async def update_slot(req: SlotUpdateRequest):
     if not 1 <= req.slot_index <= MAX_SLOTS:
-        raise HTTPException(status_code=400, detail=f"Slot index musi być 1-{MAX_SLOTS}")
+        raise HTTPException(status_code=400, detail=f"Slot index must be between 1 and {MAX_SLOTS}")
     if req.device not in ("cpu", "cuda", "vulkan"):
-        raise HTTPException(status_code=400, detail="Device musi być 'cpu', 'cuda' lub 'vulkan'")
+        raise HTTPException(status_code=400, detail="Device must be 'cpu', 'cuda' or 'vulkan'")
     await asyncio.to_thread(update_slot_device, req.slot_index, req.device)
     return {"status": "ok"}
 
