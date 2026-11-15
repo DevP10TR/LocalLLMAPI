@@ -609,6 +609,8 @@ button.brand-mark:active { transform: scale(.92); }
   background: color-mix(in srgb, var(--warn) 9%, var(--surface));
   font-size: 12.5px; line-height: 1.6; color: var(--text);
 }
+.alert[hidden] { display: none; }
+.alert > div { flex: 1; min-width: 0; }
 .alert > i { font-size: 18px; color: var(--warn); flex: none; margin-top: 1px; }
 .alert b { display: block; margin-bottom: 3px; font-size: 13px; }
 .alert-act { display: flex; gap: 7px; margin-top: 10px; }

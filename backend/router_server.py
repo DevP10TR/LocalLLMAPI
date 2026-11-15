@@ -21,14 +21,15 @@ import gc
 import glob as _glob
 import json
 import os
+import queue
 import shutil as _shutil
 import socket
 import sys
 import threading
 import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +38,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from backend.context_limits import (
+    compute_safe_context_window,
+    extract_extra_prompt_text,
+)
 from backend.db_manager import (
     add_log,
     create_api_key,
@@ -52,19 +57,20 @@ from backend.db_manager import (
     update_api_key,
     update_slot_device,
 )
-from backend.model_manager import get_available_models, get_model_path
+from backend.model_manager import find_matching_mmproj, get_available_models, get_model_path
 
 SERVER_PORT = 1000
 MAX_SLOTS = 3
 UNLOAD_IDLE_SECONDS = 120
 START_TIME = time.time()
 
-# Wymagane okno kontekstu per model (rośnie automatycznie po przepełnieniu)
+# Wymagane okno kontekstu per (model, silnik) — wyliczane dynamicznie z GGUF + pamięci
 model_n_ctx_prefs: Dict[str, int] = {}
 
 init_db()
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 # ==========================================================================
 # Stan współdzielony
@@ -76,11 +82,21 @@ class LoadedModel:
     slot_index: int
     engine: str
     llama_instance: Any
+    model_name: str = ""
     refcount: int = 0
     last_used: float = 0.0
     n_ctx: int = 8192
+    max_usable_context: int = 8192
+    n_ctx_train: int = 8192
     size_bytes: int = 0
     loaded_at: float = 0.0
+    use_mmproj: bool = False
+    mmproj_path: Optional[str] = None
+    call_lock: threading.Lock = field(default_factory=threading.Lock)
+
+
+def _model_registry_key(model_name: str, engine: str) -> str:
+    return f"{model_name}::{(engine or 'cpu').lower()}"
 
 
 loaded_models: Dict[str, LoadedModel] = {}
@@ -396,6 +412,11 @@ def start_backend_install(engine: str) -> Dict[str, Any]:
         lines = _install_state["log"]
         env = dict(os.environ)
         env["CMAKE_ARGS"] = BACKEND_CMAKE[engine] or ""
+        # Wykorzystaj wielowątkową kompilację (MSBuild / CMake), inaczej budowanie
+        # llama-cpp-python z Vulkan/CUDA potrafi trwać kilkukrotnie dłużej.
+        cpu_jobs = str(max(2, os.cpu_count() or 4))
+        env.setdefault("CMAKE_BUILD_PARALLEL_LEVEL", cpu_jobs)
+        env.setdefault("MAX_JOBS", cpu_jobs)
 
         # Środowisko musi widzieć toolkit - bez tego cmake nie znajdzie kompilatora.
         if engine == "vulkan" and not env.get("VULKAN_SDK"):
@@ -536,11 +557,69 @@ def _engine_layers(engine: str) -> int:
     return 0 if engine == "cpu" else -1  # cuda / vulkan → wszystko na GPU
 
 
-def _build_llama(model_path: str, layers: int, n_ctx: int):
+def _messages_have_images(messages: List[Dict[str, Any]]) -> bool:
+    """Sprawdza, czy którakolwiek wiadomość zawiera część obrazkową (image_url / image)."""
+    for msg in messages or []:
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get("content")
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and (
+                    part.get("type") in ("image_url", "image", "input_image")
+                    or "image_url" in part
+                ):
+                    return True
+    return False
+
+
+def _create_vision_chat_handler(model_path: str, mmproj_path: str):
+    """Dobiera handler wizyjny llama_cpp pasujący do modelu i pliku mmproj."""
+    import llama_cpp.llama_chat_format as cf
+
+    low = f"{os.path.basename(model_path)} {os.path.basename(mmproj_path)}".lower()
+    if "gemma-4" in low or "gemma4" in low:
+        cls = getattr(cf, "Gemma4ChatHandler", None)
+    elif "qwen2.5-vl" in low or "qwen25-vl" in low or "qwen2-vl" in low or "qwen2_vl" in low:
+        cls = getattr(cf, "Qwen25VLChatHandler", None) or getattr(cf, "MTMDChatHandler", None)
+    elif "minicpm" in low:
+        cls = getattr(cf, "MiniCPMv26ChatHandler", None)
+    elif "moondream" in low:
+        cls = getattr(cf, "MoondreamChatHandler", None)
+    elif "llava-v1.6" in low or "llava-1.6" in low:
+        cls = getattr(cf, "Llava16ChatHandler", None)
+    else:
+        cls = getattr(cf, "MTMDChatHandler", None) or getattr(cf, "Llava15ChatHandler", None)
+
+    if cls is None:
+        cls = getattr(cf, "Llava15ChatHandler", None)
+    if cls is None:
+        raise RuntimeError("Brak obsługiwanych handlerów wizyjnych w llama_cpp.")
+    return cls(clip_model_path=mmproj_path, verbose=False)
+
+
+def _build_llama(model_path: str, layers: int, n_ctx: int, mmproj_path: Optional[str] = None):
     """Budowa instancji Llama — wołana w wątku roboczym, nie w pętli zdarzeń."""
     from llama_cpp import Llama
 
-    return Llama(model_path=model_path, n_gpu_layers=layers, n_ctx=n_ctx, verbose=False)
+    kwargs: Dict[str, Any] = {
+        "model_path": model_path,
+        "n_gpu_layers": layers,
+        "n_ctx": n_ctx,
+        "flash_attn": True,
+        "swa_full": False,
+        "type_k": 8,
+        "type_v": 8,
+        "verbose": False,
+    }
+    if mmproj_path:
+        kwargs["chat_handler"] = _create_vision_chat_handler(model_path, mmproj_path)
+    try:
+        return Llama(**kwargs)
+    except TypeError:
+        for opt_key in ("flash_attn", "swa_full", "type_k", "type_v"):
+            kwargs.pop(opt_key, None)
+        return Llama(**kwargs)
 
 
 def _file_size(path: str) -> int:
@@ -550,24 +629,88 @@ def _file_size(path: str) -> int:
         return 0
 
 
-async def load_model(model_name: str, requested_engine: str):
-    """Zwraca instancję Llama, wczytując model jeśli trzeba. Zwiększa refcount."""
+def _resolve_model_ctx_info(model_name: str, engine: str) -> Dict[str, Any]:
+    """Oblicza bezpieczne okno kontekstu (GGUF + 70% pamięci urządzenia/RAM)."""
+    reg_key = _model_registry_key(model_name, engine)
     with models_lock:
-        lm = loaded_models.get(model_name)
-        if lm is not None:
-            lm.refcount += 1
-            lm.last_used = time.time()
-            return lm.llama_instance
+        lm = loaded_models.get(reg_key)
+        is_loaded = lm is not None
+        active_ctx = lm.n_ctx if lm is not None else 0
+        other_bytes = sum(
+            m.size_bytes for k, m in loaded_models.items() if k != reg_key
+        )
+    model_path = get_model_path(model_name)
+    return compute_safe_context_window(
+        model_path=model_path,
+        engine=engine,
+        loaded_same_model_ctx=active_ctx,
+        is_loaded=is_loaded,
+        other_models_bytes=other_bytes,
+    )
 
-    # Blokada per model: równoległe requesty tego samego modelu czekają na
-    # jedno wczytanie zamiast tworzyć po jednej instancji na request.
-    async with await _model_lock(model_name):
-        with models_lock:
-            lm = loaded_models.get(model_name)
-            if lm is not None:
+
+def _ctx_candidates(preferred_ctx: int) -> List[int]:
+    """Malejąca lista bezpiecznych wartości n_ctx na wypadek limitu VRAM przy alokacji."""
+    raw = [preferred_ctx, 32768, 16384, 8192, 4096, 2048]
+    out: List[int] = []
+    for v in raw:
+        iv = int(v)
+        if 2048 <= iv <= preferred_ctx and iv not in out:
+            out.append(iv)
+    if 2048 not in out:
+        out.append(2048)
+    return out
+
+
+async def load_model(
+    model_name: str,
+    requested_engine: str,
+    min_ctx: int = 0,
+    use_mmproj: bool = False,
+) -> LoadedModel:
+    """Zwraca ``LoadedModel``, wczytując model z bezpiecznym ``n_ctx`` (i opcjonalnym ``mmproj``) jeśli trzeba."""
+    reg_key = _model_registry_key(model_name, requested_engine)
+    model_path = await asyncio.to_thread(get_model_path, model_name)
+    desired_mmproj: Optional[str] = None
+    if use_mmproj:
+        desired_mmproj = await asyncio.to_thread(find_matching_mmproj, model_path)
+        if not desired_mmproj:
+            print(f"[Model] Brak pliku mmproj dla {model_name} — ładowanie bez projektora wizji.")
+
+    with models_lock:
+        lm = loaded_models.get(reg_key)
+        if lm is not None:
+            if lm.mmproj_path == desired_mmproj:
                 lm.refcount += 1
                 lm.last_used = time.time()
-                return lm.llama_instance
+                return lm
+
+    # Blokada per (model, silnik): równoległe requesty czekają na jedno wczytanie.
+    async with await _model_lock(reg_key):
+        need_unload_inner = False
+        prev_has_mmproj = False
+        while True:
+            with models_lock:
+                lm = loaded_models.get(reg_key)
+                if lm is None:
+                    break
+                if lm.mmproj_path == desired_mmproj:
+                    lm.refcount += 1
+                    lm.last_used = time.time()
+                    return lm
+                if lm.refcount <= 0:
+                    prev_has_mmproj = bool(lm.mmproj_path)
+                    need_unload_inner = True
+                    break
+            # Inny request właśnie trwa — poczekaj aż zwolni model, żeby przeładować w docelowym trybie mmproj.
+            await asyncio.sleep(0.1)
+
+        if need_unload_inner:
+            print(
+                f"[Model] Zmiana trybu mmproj dla {model_name} "
+                f"({prev_has_mmproj} -> {bool(desired_mmproj)}), przeładowanie..."
+            )
+            await unload_model(model_name, engine=requested_engine)
 
         # Backend sprawdzamy PRZED rezerwacją slotu, żeby błąd providera nie
         # zostawiał za sobą zaalokowanego slotu ani pobranego modelu.
@@ -578,58 +721,108 @@ async def load_model(model_name: str, requested_engine: str):
             await _close_instance(victim.llama_instance)
 
         try:
-            model_path = await asyncio.to_thread(get_model_path, model_name)
-            n_ctx = model_n_ctx_prefs.get(model_name, 8192)
+            ctx_info = await asyncio.to_thread(_resolve_model_ctx_info, model_name, requested_engine)
+            safe_cap = int(ctx_info.get("max_usable_context") or 8192)
+            train_ctx = int(ctx_info.get("n_ctx_train") or safe_cap)
+            pref = int(model_n_ctx_prefs.get(reg_key) or 0)
+            target_ctx = max(pref or safe_cap, int(min_ctx or 0))
+            target_ctx = max(2048, min(safe_cap, target_ctx))
             layers = _engine_layers(requested_engine)
-            print(f"[Model] Loading {model_name} -> slot {slot_idx} ({requested_engine})")
-            instance = await asyncio.to_thread(_build_llama, model_path, layers, n_ctx)
+
+            instance = None
+            chosen_ctx = target_ctx
+            last_exc: Optional[BaseException] = None
+            for cand_ctx in _ctx_candidates(target_ctx):
+                try:
+                    mm_info = f", mmproj={os.path.basename(desired_mmproj)}" if desired_mmproj else ""
+                    print(
+                        f"[Model] Loading {model_name} -> slot {slot_idx} "
+                        f"({requested_engine}, n_ctx={cand_ctx}, safe_cap={safe_cap}, train={train_ctx}{mm_info})"
+                    )
+                    instance = await asyncio.to_thread(
+                        _build_llama, model_path, layers, cand_ctx, desired_mmproj
+                    )
+                    chosen_ctx = cand_ctx
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    msg_low = str(exc).lower()
+                    if any(w in msg_low for w in ("memory", "vram", "alloc", "context", "failed to create")) and cand_ctx > 2048:
+                        print(f"[Model] n_ctx={cand_ctx} failed ({exc}), retrying lower n_ctx...")
+                        continue
+                    raise
+            if instance is None:
+                assert last_exc is not None
+                raise last_exc
+
+            # Jeśli sprzęt wymusił mniejsze n_ctx przy alokacji, ogranicz max_usable_context
+            # do wartości faktycznie wykonalnej na tym urządzeniu.
+            effective_max_ctx = safe_cap if chosen_ctx == target_ctx else chosen_ctx
+            model_n_ctx_prefs[reg_key] = chosen_ctx
         except BaseException:
             with models_lock:
                 _slots_reserved.discard(slot_idx)
             raise
 
+        lm = LoadedModel(
+            slot_index=slot_idx,
+            engine=requested_engine,
+            llama_instance=instance,
+            model_name=model_name,
+            refcount=1,
+            last_used=time.time(),
+            n_ctx=chosen_ctx,
+            max_usable_context=effective_max_ctx,
+            n_ctx_train=train_ctx,
+            size_bytes=_file_size(model_path),
+            loaded_at=time.time(),
+            use_mmproj=bool(desired_mmproj),
+            mmproj_path=desired_mmproj,
+        )
         with models_lock:
-            loaded_models[model_name] = LoadedModel(
-                slot_index=slot_idx,
-                engine=requested_engine,
-                llama_instance=instance,
-                refcount=1,
-                last_used=time.time(),
-                n_ctx=n_ctx,
-                size_bytes=_file_size(model_path),
-                loaded_at=time.time(),
-            )
+            loaded_models[reg_key] = lm
             _slots_reserved.discard(slot_idx)
-        return instance
+        return lm
 
 
-def release_model(model_name: str) -> None:
+def release_model(model_name: str, engine: Optional[str] = None) -> None:
     """Synchronous — wywoływane też z wątku streamera, bez pętli zdarzeń.
 
     Dzięki ``threading.RLock`` nie potrzebujemy ``run_coroutine_threadsafe``,
     który w bloku ``finally`` potrafił zakleszczyć pętlę.
     """
     with models_lock:
-        lm = loaded_models.get(model_name)
-        if lm is not None:
-            lm.refcount = max(0, lm.refcount - 1)
-            lm.last_used = time.time()
+        if engine:
+            lm = loaded_models.get(_model_registry_key(model_name, engine))
+            if lm is not None:
+                lm.refcount = max(0, lm.refcount - 1)
+                lm.last_used = time.time()
+            return
+        for key, lm in loaded_models.items():
+            if lm.model_name == model_name or key == model_name:
+                lm.refcount = max(0, lm.refcount - 1)
+                lm.last_used = time.time()
 
 
-async def unload_model(model_name: str, force: bool = False) -> bool:
-    """Zwalnia model. Bez ``force`` czeka aż spadnie liczba aktywnych requestów."""
+async def unload_model(model_name: str, force: bool = False, engine: Optional[str] = None) -> bool:
+    """Zwalnia model (wg nazwy lub pełnego klucza ``model::engine``)."""
+    victims: List[Tuple[str, Any, int]] = []
     with models_lock:
-        lm = loaded_models.get(model_name)
-        if lm is None:
-            return False
-        if lm.refcount > 0 and not force:
-            return False
-        loaded_models.pop(model_name, None)
-        instance, slot = lm.llama_instance, lm.slot_index
+        target_key = _model_registry_key(model_name, engine) if engine else None
+        for key, lm in list(loaded_models.items()):
+            matched = (key == target_key) if target_key else (key == model_name or lm.model_name == model_name)
+            if not matched:
+                continue
+            if lm.refcount > 0 and not force:
+                continue
+            loaded_models.pop(key, None)
+            victims.append((key, lm.llama_instance, lm.slot_index))
 
-    # Ciężkie zamykanie poza lockiem, żeby nie blokować innych operacji.
-    await _close_instance(instance)
-    print(f"[Model] Unloaded {model_name} (slot {slot})")
+    if not victims:
+        return False
+    for _, instance, slot in victims:
+        await _close_instance(instance)
+        print(f"[Model] Unloaded {model_name} (slot {slot})")
     return True
 
 
@@ -639,23 +832,25 @@ async def _close_instance(instance) -> None:
     gc.collect()
 
 
-async def _handle_context_overflow(model_name: str):
-    """Zwiększa n_ctx i zwalnia model, by następny request wczytał go z nowym oknem."""
-    safe = False
+async def _handle_context_overflow(model_name: str, engine: Optional[str] = None) -> None:
+    """Zwiększa n_ctx w granicach bezpiecznego limitu i zwalnia model na następne zapytanie."""
+    to_unload: List[str] = []
     with models_lock:
-        lm = loaded_models.get(model_name)
-        if lm is None:
-            return
-        new_ctx = min(lm.n_ctx + 2000, 131072)
-        model_n_ctx_prefs[model_name] = new_ctx
-        print(f"[Model] n_ctx for {model_name} -> {new_ctx}")
-        # Nie zamykaj modelu, którego używają inne aktywne requesty —
-        # zwolni się sam, gdy refcount spadnie do zera.
-        safe = lm.refcount <= 1
-        if safe:
-            lm.refcount = 0
-    if safe:
-        await unload_model(model_name)
+        target_key = _model_registry_key(model_name, engine) if engine else None
+        for key, lm in loaded_models.items():
+            matched = (key == target_key) if target_key else (key == model_name or lm.model_name == model_name)
+            if not matched:
+                continue
+            cap = lm.max_usable_context or lm.n_ctx_train or 32768
+            new_ctx = min(lm.n_ctx + 4096, cap)
+            if new_ctx > lm.n_ctx:
+                model_n_ctx_prefs[key] = new_ctx
+                print(f"[Model] n_ctx for {key} -> {new_ctx} (cap={cap})")
+                if lm.refcount <= 1:
+                    lm.refcount = 0
+                    to_unload.append(key)
+    for key in to_unload:
+        await unload_model(key)
 
 
 def snapshot_models() -> List[Dict[str, Any]]:
@@ -664,16 +859,19 @@ def snapshot_models() -> List[Dict[str, Any]]:
         source = list(loaded_models.items())
     items = [
         {
-            "name": name,
+            "key": key,
+            "name": lm.model_name or key.split("::", 1)[0],
             "slot": lm.slot_index,
             "engine": lm.engine,
             "refcount": lm.refcount,
             "n_ctx": lm.n_ctx,
+            "max_usable_context": lm.max_usable_context,
+            "n_ctx_train": lm.n_ctx_train,
             "size_bytes": lm.size_bytes,
             "loaded_at": lm.loaded_at,
             "last_used": lm.last_used,
         }
-        for name, lm in list(loaded_models.items())
+        for key, lm in source
     ]
     items.sort(key=lambda m: m["slot"])
     return items
@@ -719,16 +917,25 @@ def _get_encoder(name: str = "cl100k_base"):
         return enc
 
 
-def count_prompt_tokens(messages: List[Dict[str, Any]]) -> int:
+def count_prompt_tokens(messages: List[Dict[str, Any]], tools: Any = None) -> int:
     try:
         enc = _get_encoder()
     except Exception:
-        return 0
+        enc = None
     total = 0
     for m in messages:
         content = m.get("content", "")
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    parts.append(str(part.get("text") or ""))
+            content = "\n".join(parts)
         if isinstance(content, str):
-            total += len(enc.encode(content))
+            total += len(enc.encode(content)) if enc is not None else max(1, len(content) // 4)
+    tools_text = extract_extra_prompt_text(tools)
+    if tools_text:
+        total += len(enc.encode(tools_text)) if enc is not None else max(1, len(tools_text) // 4)
     return total + len(messages) * 4 + 2
 
 
@@ -789,42 +996,164 @@ def friendly_error(exc: BaseException) -> str:
 
 
 class Metrics:
-    """Liczy t/s, TTFT i tokeny zgodnie z oryginalną formułą aplikacji."""
+    """Dokładny pomiar tokenów/s, TTFT i liczby tokenów (perf_counter + usage/tokenizer)."""
 
-    __slots__ = ("completion_tokens", "chunk_times", "first_token_latency", "last_t", "content")
+    __slots__ = (
+        "chunk_tokens",
+        "window_tokens",
+        "window_start",
+        "bucket_tps",
+        "gen_start",
+        "first_token_t",
+        "last_token_t",
+        "content",
+        "all_generated",
+        "reported_prompt_tokens",
+        "reported_completion_tokens",
+    )
 
     def __init__(self):
-        self.completion_tokens = 0
-        self.chunk_times: List[float] = []
-        self.first_token_latency: Optional[float] = None
-        self.last_t = time.time()
+        now = time.perf_counter()
+        self.chunk_tokens = 0
+        self.window_tokens = 0
+        self.window_start = now
+        self.bucket_tps: List[float] = []
+        self.gen_start = now
+        self.first_token_t: Optional[float] = None
+        self.last_token_t: Optional[float] = None
         self.content: List[str] = []
+        self.all_generated: List[str] = []
+        self.reported_prompt_tokens = 0
+        self.reported_completion_tokens = 0
+
+    def mark_gen_start(self) -> None:
+        """Ustawia punkt startu inferencji po wczytaniu modelu i przejęciu locka."""
+        now = time.perf_counter()
+        self.gen_start = now
+        self.window_start = now
 
     def observe(self, delta_content: str):
-        now = time.time()
-        delta = now - self.last_t
-        self.completion_tokens += 1
-        if self.first_token_latency is None:
-            self.first_token_latency = delta
-        elif delta > 0:
-            self.chunk_times.append(1.0 / delta)
-        self.last_t = now
+        now = time.perf_counter()
+        self.chunk_tokens += 1
+        if self.first_token_t is None:
+            self.first_token_t = now
+            self.window_start = now
+            self.window_tokens = 0
+        else:
+            self.window_tokens += 1
+            win_dt = now - self.window_start
+            if win_dt >= 0.25 and self.window_tokens >= 2:
+                self.bucket_tps.append(self.window_tokens / win_dt)
+                self.window_start = now
+                self.window_tokens = 0
+        self.last_token_t = now
         if delta_content:
             self.content.append(delta_content)
+            self.all_generated.append(delta_content)
 
-    def summary(self, start_time: float, prompt_tokens: int) -> Dict[str, Any]:
-        elapsed = time.time() - start_time
-        ttft = self.first_token_latency or 0.0
-        gen_time = elapsed - ttft
+    def observe_chunk(self, chunk: Dict[str, Any]) -> None:
+        raw_usage = chunk.get("usage")
+        if isinstance(raw_usage, dict):
+            pt = raw_usage.get("prompt_tokens")
+            ct = raw_usage.get("completion_tokens")
+            if isinstance(pt, (int, float)) and int(pt) > 0:
+                self.reported_prompt_tokens = int(pt)
+            if isinstance(ct, (int, float)) and int(ct) > 0:
+                self.reported_completion_tokens = int(ct)
+
+        try:
+            delta = chunk["choices"][0]["delta"] or {}
+        except (KeyError, IndexError, TypeError):
+            delta = {}
+        if not isinstance(delta, dict):
+            return
+
+        content_piece = delta.get("content") or ""
+        reason_piece = (
+            delta.get("reasoning_content")
+            or delta.get("reasoning")
+            or delta.get("thinking")
+            or ""
+        )
+        tool_calls = delta.get("tool_calls")
+        tool_piece = ""
+        if tool_calls:
+            try:
+                tool_piece = json.dumps(tool_calls, ensure_ascii=False)
+            except Exception:
+                tool_piece = str(tool_calls)
+
+        if content_piece or reason_piece or tool_piece:
+            now = time.perf_counter()
+            self.chunk_tokens += 1
+            if self.first_token_t is None:
+                self.first_token_t = now
+                self.window_start = now
+                self.window_tokens = 0
+            else:
+                self.window_tokens += 1
+                win_dt = now - self.window_start
+                if win_dt >= 0.25 and self.window_tokens >= 2:
+                    self.bucket_tps.append(self.window_tokens / win_dt)
+                    self.window_start = now
+                    self.window_tokens = 0
+            self.last_token_t = now
+            if content_piece:
+                self.content.append(content_piece)
+                self.all_generated.append(content_piece)
+            if reason_piece:
+                self.all_generated.append(reason_piece)
+            if tool_piece:
+                self.all_generated.append(tool_piece)
+
+    def _exact_completion_tokens(self, llm: Any = None) -> int:
+        if self.reported_completion_tokens > 0:
+            return self.reported_completion_tokens
+        full_out = "".join(self.all_generated)
+        if llm is not None and full_out:
+            try:
+                toks = llm.tokenize(full_out.encode("utf-8", errors="ignore"), add_bos=False)
+                if isinstance(toks, list) and len(toks) > 0:
+                    return max(self.chunk_tokens, len(toks)) if self.chunk_tokens > 0 else len(toks)
+            except Exception:
+                pass
+        if full_out and self.chunk_tokens <= 0:
+            try:
+                return len(_get_encoder().encode(full_out))
+            except Exception:
+                return max(1, len(full_out) // 4)
+        return self.chunk_tokens
+
+    def summary(self, prompt_tokens: int, llm: Any = None) -> Dict[str, Any]:
+        end_t = self.last_token_t or time.perf_counter()
+        elapsed = max(0.001, end_t - self.gen_start)
+        ttft = (self.first_token_t - self.gen_start) if self.first_token_t is not None else 0.0
+        comp_tokens = self._exact_completion_tokens(llm=llm)
+        p_tokens = self.reported_prompt_tokens if self.reported_prompt_tokens > 0 else int(prompt_tokens)
+
+        if comp_tokens > 1 and self.first_token_t is not None and end_t > self.first_token_t:
+            decode_time = max(0.001, end_t - self.first_token_t)
+            avg_tps = (comp_tokens - 1) / decode_time
+        elif comp_tokens == 1:
+            avg_tps = 1.0 / max(0.001, elapsed)
+        else:
+            avg_tps = 0.0
+
+        samples = list(self.bucket_tps)
+        if self.window_tokens >= 1 and end_t > self.window_start and (end_t - self.window_start) >= 0.05:
+            samples.append(self.window_tokens / (end_t - self.window_start))
+        if not samples and avg_tps > 0:
+            samples = [avg_tps]
+
         return {
             "elapsed": round(elapsed, 2),
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": self.completion_tokens,
-            "total_tokens": self.completion_tokens + prompt_tokens,
-            "avg_tps": round(self.completion_tokens / gen_time if gen_time > 0 else 0.0, 2),
-            "min_tps": round(min(self.chunk_times), 2) if self.chunk_times else 0.0,
-            "max_tps": round(max(self.chunk_times), 2) if self.chunk_times else 0.0,
-            "ttft": round(ttft, 3),
+            "prompt_tokens": p_tokens,
+            "completion_tokens": comp_tokens,
+            "total_tokens": comp_tokens + p_tokens,
+            "avg_tps": round(avg_tps, 2),
+            "min_tps": round(min(samples), 2) if samples else 0.0,
+            "max_tps": round(max(samples), 2) if samples else 0.0,
+            "ttft": round(max(0.0, ttft), 3),
         }
 
 
@@ -844,11 +1173,7 @@ def _persist(api_key_id: int, model: str, m: Dict[str, Any]):
 def _collect_chunks(chunks, metrics: Metrics) -> None:
     """Blokujące — wywoływane w wątku roboczym dla trybu non-streaming."""
     for chunk in chunks:
-        try:
-            delta = chunk["choices"][0]["delta"].get("content", "")
-        except (KeyError, IndexError, TypeError):
-            continue
-        metrics.observe(delta)
+        metrics.observe_chunk(chunk)
 
 
 # ==========================================================================
@@ -877,6 +1202,29 @@ def get_current_api_key(
     return key_id
 
 
+def _context_headers(
+    max_ctx: int, active_ctx: int, prompt_tokens: int, engine: str
+) -> Dict[str, str]:
+    remaining = max(0, int(max_ctx) - int(prompt_tokens))
+    return {
+        "X-LocalLLM-Max-Context": str(int(max_ctx)),
+        "X-LocalLLM-Active-Context": str(int(active_ctx)),
+        "X-LocalLLM-Prompt-Tokens": str(int(prompt_tokens)),
+        "X-LocalLLM-Remaining-Context": str(remaining),
+        "X-LocalLLM-Engine": str(engine),
+    }
+
+
+def _resolve_caller_engine_sync(credentials: Optional[HTTPAuthorizationCredentials]) -> str:
+    if credentials and credentials.credentials:
+        key_id = get_api_key_by_value(credentials.credentials)
+        if key_id:
+            return get_engine_for_key(key_id)
+    devices = get_slot_devices()
+    return devices.get(1, "cpu")
+
+
+@app.post("/chat/completions")
 @app.post("/v1/chat/completions")
 async def chat_completions(
     request: ChatCompletionRequest, api_key_id: int = Depends(get_current_api_key)
@@ -886,60 +1234,135 @@ async def chat_completions(
 
     api_engine = await asyncio.to_thread(get_engine_for_key, api_key_id)
     start_time = time.time()
-    llm = await load_model(request.model, api_engine)
+    needs_vision = _messages_have_images(request.messages)
+    lm = await load_model(request.model, api_engine, use_mmproj=needs_vision)
+    handed_off_to_stream = False
+    released = False
 
     # Od tego momentu refcount musi zawsze spaść — inaczej slot zostaje
     # zablokowany na stałe (tak było przy rozłączeniu klienta w trakcie streamu).
     try:
         extra = request.model_extra or {}
-        filtered = {k: v for k, v in extra.items() if k in _supported_kwargs(llm)}
-        prompt_tokens = await asyncio.to_thread(count_prompt_tokens, request.messages)
-
-        chunks = llm.create_chat_completion(
-            model=request.model,
-            messages=request.messages,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            stream=True,
-            **filtered,
+        prompt_tokens = await asyncio.to_thread(
+            count_prompt_tokens, request.messages, extra.get("tools")
         )
-        metrics = Metrics()
+        ctx_info = await asyncio.to_thread(_resolve_model_ctx_info, request.model, api_engine)
+        safe_cap = int(ctx_info.get("max_usable_context") or lm.max_usable_context or lm.n_ctx)
+        effective_max = max(lm.n_ctx, min(lm.max_usable_context or safe_cap, safe_cap))
 
-        if request.stream:
-            return _stream_response(
-                request, api_key_id, chunks, metrics, start_time, prompt_tokens
+        if prompt_tokens > effective_max:
+            ctx_headers = _context_headers(effective_max, lm.n_ctx, prompt_tokens, lm.engine)
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": {
+                        "message": (
+                            f"Context length exceeded: prompt uses {prompt_tokens} tokens, "
+                            f"but maximum usable context for '{request.model}' ({lm.engine}) is {effective_max} tokens."
+                        ),
+                        "type": "invalid_request_error",
+                        "code": "context_length_exceeded",
+                        "max_context_tokens": effective_max,
+                        "prompt_tokens": prompt_tokens,
+                    }
+                },
+                headers=ctx_headers,
             )
 
-        # Non-streaming: generacja w wątku, żeby pętla zdarzeń nie stała.
+        # Jeśli model był załadowany z mniejszym n_ctx niż aktualny prompt (ale mieści się
+        # w bezpiecznym limicie), przeładuj go automatycznie przed inferencją.
+        if prompt_tokens > lm.n_ctx and lm.refcount <= 1:
+            needed_ctx = min(effective_max, max(prompt_tokens + 1024, lm.n_ctx + 4096))
+            release_model(request.model, api_engine)
+            released = True
+            await unload_model(request.model, engine=api_engine)
+            lm = await load_model(
+                request.model, api_engine, min_ctx=needed_ctx, use_mmproj=needs_vision
+            )
+            released = False
+
+        llm = lm.llama_instance
+        filtered = {k: v for k, v in extra.items() if k in _supported_kwargs(llm)}
+        metrics = Metrics()
+        ctx_headers = _context_headers(effective_max, lm.n_ctx, prompt_tokens, lm.engine)
+
+        if request.stream:
+            handed_off_to_stream = True
+            return _stream_response(
+                request,
+                api_key_id,
+                lm,
+                filtered,
+                metrics,
+                start_time,
+                prompt_tokens,
+                effective_max,
+                ctx_headers,
+            )
+
+        # Non-streaming: generacja w wątku pod blokadą instancji Llama.
+        def _run_non_streaming():
+            with lm.call_lock:
+                metrics.mark_gen_start()
+                chunks = llm.create_chat_completion(
+                    model=request.model,
+                    messages=request.messages,
+                    temperature=request.temperature,
+                    max_tokens=request.max_tokens,
+                    stream=True,
+                    **filtered,
+                )
+                _collect_chunks(chunks, metrics)
+
         try:
-            await asyncio.to_thread(_collect_chunks, chunks, metrics)
+            await asyncio.to_thread(_run_non_streaming)
         except (OSError, ValueError) as e:
             if "context window" in str(e) or "context length" in str(e):
-                await _handle_context_overflow(request.model)
+                await _handle_context_overflow(request.model, engine=api_engine)
                 log_error(f"context overflow ({request.model}): {e}")
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": {
+                            "message": f"{e} (max usable context: {effective_max} tokens)",
+                            "type": "invalid_request_error",
+                            "code": "context_length_exceeded",
+                            "max_context_tokens": effective_max,
+                            "prompt_tokens": prompt_tokens,
+                        }
+                    },
+                    headers=ctx_headers,
+                )
             else:
                 raise
 
-        summary = metrics.summary(start_time, prompt_tokens)
+        summary = metrics.summary(prompt_tokens, llm=llm)
         await asyncio.to_thread(_persist, api_key_id, request.model, summary)
-        return {
-            "id": f"chatcmpl-{int(time.time())}",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": request.model,
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": "".join(metrics.content)},
-                    "finish_reason": "stop",
-                }
-            ],
-            "usage": {
-                "prompt_tokens": summary["prompt_tokens"],
-                "completion_tokens": summary["completion_tokens"],
-                "total_tokens": summary["total_tokens"],
+        remaining_after = max(0, effective_max - summary["total_tokens"])
+        return JSONResponse(
+            content={
+                "id": f"chatcmpl-{int(time.time())}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": request.model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "".join(metrics.content)},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": summary["prompt_tokens"],
+                    "completion_tokens": summary["completion_tokens"],
+                    "total_tokens": summary["total_tokens"],
+                    "max_context_tokens": effective_max,
+                    "active_n_ctx": lm.n_ctx,
+                    "remaining_context_tokens": remaining_after,
+                },
             },
-        }
+            headers=ctx_headers,
+        )
 
     except HTTPException:
         raise
@@ -949,54 +1372,146 @@ async def chat_completions(
         log_error(f"{e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=friendly_error(e))
     finally:
-        release_model(request.model)
+        if not handed_off_to_stream and not released:
+            release_model(request.model, api_engine)
 
 
-def _stream_response(request, api_key_id, chunks, metrics, start_time, prompt_tokens):
-    """Odpowiedź SSE. Synchronous generator — Starlette iteruje go w threadpool."""
+def _stream_response(
+    request,
+    api_key_id,
+    lm: LoadedModel,
+    filtered: Dict[str, Any],
+    metrics: Metrics,
+    start_time: float,
+    prompt_tokens: int,
+    effective_max: int,
+    ctx_headers: Dict[str, str],
+):
+    """Odpowiedź SSE z keep-alive podczas długiego prompt eval i bezpiecznym zwalnianiem."""
+    q: queue.Queue = queue.Queue()
+    cancel_event = threading.Event()
+    producer_started = False
 
-    def stream_generator():
+    def _producer():
+        final_summary: Optional[Dict[str, Any]] = None
         try:
-            for chunk in chunks:
-                try:
-                    delta = chunk["choices"][0]["delta"].get("content", "")
-                except (KeyError, IndexError, TypeError):
-                    delta = ""
-                chunk["object"] = "chat.completion.chunk"
-                yield f"data: {json.dumps(chunk)}\n\n"
-                if delta:
-                    metrics.observe(delta)
-            yield "data: [DONE]\n\n"
+            with lm.call_lock:
+                if cancel_event.is_set():
+                    return
+                metrics.mark_gen_start()
+                chunks = lm.llama_instance.create_chat_completion(
+                    model=request.model,
+                    messages=request.messages,
+                    temperature=request.temperature,
+                    max_tokens=request.max_tokens,
+                    stream=True,
+                    **filtered,
+                )
+                for chunk in chunks:
+                    if cancel_event.is_set():
+                        break
+                    metrics.observe_chunk(chunk)
+                    chunk["object"] = "chat.completion.chunk"
+                    q.put(("chunk", chunk))
+
+                final_summary = metrics.summary(prompt_tokens, llm=lm.llama_instance)
+            q.put(("done", final_summary))
         except (OSError, ValueError) as e:
             msg = str(e)
             log_error(f"stream error ({request.model}): {msg}")
             if "context window" in msg or "context length" in msg:
-                yield (
-                    "data: "
-                    + json.dumps(
-                        {
-                            "error": {
-                                "message": msg,
-                                "type": "context_length_exceeded",
-                                "code": "context_length_exceeded",
-                            }
-                        }
-                    )
-                    + "\n\n"
-                )
-                yield "data: [DONE]\n\n"
+                new_ctx = min((lm.n_ctx or 8192) + 4096, effective_max)
+                model_n_ctx_prefs[_model_registry_key(request.model, lm.engine)] = new_ctx
+                q.put(("ctx_err", msg))
+            else:
+                q.put(("err", e))
+        except Exception as e:
+            log_error(f"stream error ({request.model}): {e}")
+            q.put(("err", e))
         finally:
-            # GeneratorExit przy rozłączeniu klienta też wchodzi tutaj, więc
-            # log i release_model nigdy nie zostaną pominięte. release_model
-            # jest sync i nie potrzebuje pętli zdarzeń.
             with contextlib.suppress(Exception):
                 _persist(
                     api_key_id,
                     request.model,
-                    metrics.summary(start_time, prompt_tokens),
+                    final_summary or metrics.summary(prompt_tokens),
                 )
             with contextlib.suppress(Exception):
-                release_model(request.model)
+                release_model(request.model, lm.engine)
+
+    t = threading.Thread(target=_producer, daemon=True)
+    t.start()
+    producer_started = True
+
+    def stream_generator():
+        try:
+            while True:
+                try:
+                    kind, payload = q.get(timeout=5.0)
+                except queue.Empty:
+                    yield ": keep-alive\n\n"
+                    continue
+
+                if kind == "chunk":
+                    yield f"data: {json.dumps(payload)}\n\n"
+                elif kind == "done":
+                    remaining_after = max(0, effective_max - payload["total_tokens"])
+                    usage_chunk = {
+                        "id": f"chatcmpl-{int(start_time)}",
+                        "object": "chat.completion.chunk",
+                        "created": int(start_time),
+                        "model": request.model,
+                        "choices": [],
+                        "usage": {
+                            "prompt_tokens": payload["prompt_tokens"],
+                            "completion_tokens": payload["completion_tokens"],
+                            "total_tokens": payload["total_tokens"],
+                            "max_context_tokens": effective_max,
+                            "active_n_ctx": lm.n_ctx,
+                            "remaining_context_tokens": remaining_after,
+                            "tokens_per_second": payload["avg_tps"],
+                        },
+                    }
+                    yield f"data: {json.dumps(usage_chunk)}\n\n"
+                    yield "data: [DONE]\n\n"
+                    break
+                elif kind == "ctx_err":
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {
+                                "error": {
+                                    "message": f"{payload} (max usable context: {effective_max} tokens)",
+                                    "type": "context_length_exceeded",
+                                    "code": "context_length_exceeded",
+                                    "max_context_tokens": effective_max,
+                                    "prompt_tokens": prompt_tokens,
+                                }
+                            }
+                        )
+                        + "\n\n"
+                    )
+                    yield "data: [DONE]\n\n"
+                    break
+                elif kind == "err":
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {
+                                "error": {
+                                    "message": friendly_error(payload),
+                                    "type": "server_error",
+                                }
+                            }
+                        )
+                        + "\n\n"
+                    )
+                    yield "data: [DONE]\n\n"
+                    break
+        finally:
+            cancel_event.set()
+            if not producer_started:
+                with contextlib.suppress(Exception):
+                    release_model(request.model, lm.engine)
 
     return StreamingResponse(
         stream_generator(),
@@ -1005,14 +1520,66 @@ def _stream_response(request, api_key_id, chunks, metrics, start_time, prompt_to
             "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            **ctx_headers,
         },
     )
 
 
+def _model_list_entry(model_name: str, engine: str) -> Dict[str, Any]:
+    ctx_info = _resolve_model_ctx_info(model_name, engine)
+    max_ctx = int(ctx_info.get("max_usable_context") or 8192)
+    mmproj = find_matching_mmproj(get_model_path(model_name))
+    return {
+        "id": model_name,
+        "object": "model",
+        "vision": bool(mmproj),
+        "context_length": max_ctx,
+        "max_model_len": max_ctx,
+        "max_usable_context": max_ctx,
+        "n_ctx_train": int(ctx_info.get("n_ctx_train") or max_ctx),
+        "active_n_ctx": int(ctx_info.get("active_n_ctx") or max_ctx),
+        "engine": engine,
+        "architecture": ctx_info.get("architecture", "unknown"),
+        "kv_cache_bytes_per_token": int(ctx_info.get("kv_cache_bytes_per_token") or 0),
+        "memory_budget": {
+            "file_size_gb": ctx_info.get("file_size_gb", 0.0),
+            "free_ram_gb": ctx_info.get("free_ram_gb", 0.0),
+            "free_vram_gb": ctx_info.get("free_vram_gb"),
+            "budget_source": ctx_info.get("budget_source", "system_ram"),
+            "recommended_compaction_at": ctx_info.get("recommended_compaction_at", 0.97),
+        },
+    }
+
+
+@app.get("/models")
 @app.get("/v1/models")
-async def list_models():
+async def list_models(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+):
+    engine = await asyncio.to_thread(_resolve_caller_engine_sync, credentials)
     models = await asyncio.to_thread(get_available_models)
-    return {"object": "list", "data": [{"id": m, "object": "model"} for m in models]}
+    entries = await asyncio.to_thread(lambda: [_model_list_entry(m, engine) for m in models])
+    return {"object": "list", "data": entries}
+
+
+@app.get("/context")
+@app.get("/v1/context")
+async def get_all_models_context(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+):
+    engine = await asyncio.to_thread(_resolve_caller_engine_sync, credentials)
+    models = await asyncio.to_thread(get_available_models)
+    entries = await asyncio.to_thread(lambda: [_model_list_entry(m, engine) for m in models])
+    return {"object": "context_budget_list", "engine": engine, "data": entries}
+
+
+@app.get("/v1/models/{model_id:path}/context")
+async def get_model_context(
+    model_id: str,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+):
+    engine = await asyncio.to_thread(_resolve_caller_engine_sync, credentials)
+    return await asyncio.to_thread(_model_list_entry, model_id, engine)
 
 
 # ==========================================================================
@@ -1075,7 +1642,7 @@ async def unload_all(model_name: Optional[str] = None):
             "status": "ok",
             "message": f"Model {model_name} {'unloaded' if ok else 'was not loaded'}",
         }
-    free = [m["name"] for m in snapshot_models() if m["refcount"] <= 0]
+    free = [m["key"] for m in snapshot_models() if m["refcount"] <= 0]
     for n in free:
         await unload_model(n)
     return {"status": "ok", "message": "All unused models unloaded"}
@@ -1084,10 +1651,15 @@ async def unload_all(model_name: Optional[str] = None):
 @app.get("/api/status")
 async def get_status():
     loaded = snapshot_models()
+    name_counts: Dict[str, int] = {}
+    for m in loaded:
+        name_counts[m["name"]] = name_counts.get(m["name"], 0) + 1
+    loaded_map = {}
+    for m in loaded:
+        label = f"{m['name']} ({m['engine']})" if name_counts.get(m["name"], 0) > 1 else m["name"]
+        loaded_map[label] = {k: v for k, v in m.items() if k not in ("name", "key")}
     return {
-        "loaded_models": {
-            m["name"]: {k: v for k, v in m.items() if k != "name"} for m in loaded
-        },
+        "loaded_models": loaded_map,
         "local_ip": get_local_ip(),
         "port": SERVER_PORT,
         "uptime": int(time.time() - START_TIME),

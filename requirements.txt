@@ -10,6 +10,7 @@ fastapi
 uvicorn[standard]
 pydantic
 huggingface-hub
+psutil
 
 # Liczy tokeny promptu do logów. Pobiera plik BPE przy pierwszym użyciu,
 # więc do instalacji potrzebny jest dostęp do sieci (potem działa offline).

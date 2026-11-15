@@ -6,7 +6,9 @@ odpytuje ``/v1/models`` co parę sekund — wcześniej każde zapytanie robiło
 """
 
 import os
+import re
 import threading
+from typing import Optional
 
 MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
 
@@ -41,6 +43,11 @@ def download_test_model():
         invalidate_cache()
 
 
+def _is_mmproj_file(filename: str) -> bool:
+    low = filename.lower()
+    return low.endswith(".gguf") and (low.startswith("mmproj") or "-mmproj" in low or "_mmproj" in low)
+
+
 def _signature() -> tuple:
     """Sygnatura katalogu — zmiana plików unieważnia cache."""
     try:
@@ -48,7 +55,7 @@ def _signature() -> tuple:
             sorted(
                 (f, os.path.getsize(os.path.join(MODELS_DIR, f)))
                 for f in os.listdir(MODELS_DIR)
-                if f.lower().endswith(".gguf")
+                if f.lower().endswith(".gguf") and not _is_mmproj_file(f)
             )
         )
     except OSError:
@@ -95,3 +102,48 @@ def get_model_path(model_name: str) -> str:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Model {model_name} nie został znaleziony w {MODELS_DIR}")
     return path
+
+
+def _tokenize_model_name(name: str) -> list[str]:
+    stem = os.path.splitext(os.path.basename(name))[0].lower()
+    raw = [t for t in re.split(r"[-_.\s]+", stem) if t]
+    ignore = {"gguf", "mmproj", "proj", "q2", "q3", "q4", "q5", "q6", "q8", "k", "m", "s", "xl", "f16", "bf16", "f32", "iq1", "iq2", "iq3", "iq4", "ud", "0", "it"}
+    return [t for t in raw if t not in ignore]
+
+
+def find_matching_mmproj(model_path: str) -> Optional[str]:
+    """Znajduje pasujący plik mmproj*.gguf w katalogu modelu (lub MODELS_DIR)."""
+    search_dirs = []
+    model_dir = os.path.dirname(os.path.abspath(model_path))
+    if os.path.isdir(model_dir):
+        search_dirs.append(model_dir)
+    if os.path.isdir(MODELS_DIR) and os.path.abspath(MODELS_DIR) != model_dir:
+        search_dirs.append(MODELS_DIR)
+
+    candidates: list[str] = []
+    for d in search_dirs:
+        try:
+            for fname in sorted(os.listdir(d)):
+                if _is_mmproj_file(fname):
+                    candidates.append(os.path.join(d, fname))
+        except OSError:
+            continue
+
+    if not candidates:
+        return None
+
+    model_tokens = _tokenize_model_name(model_path)
+    best_path: Optional[str] = None
+    best_score = 0
+    for cand in candidates:
+        cand_tokens = set(_tokenize_model_name(cand))
+        overlap = sum(1 for t in model_tokens if t in cand_tokens)
+        if overlap > best_score:
+            best_score = overlap
+            best_path = cand
+
+    if best_score >= 2:
+        return best_path
+    if len(candidates) == 1 and best_score >= 1:
+        return candidates[0]
+    return None

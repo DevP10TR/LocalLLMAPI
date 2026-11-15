@@ -1,143 +1,62 @@
-# LocalLLMAPI
+<div align="center">
+  <img src="assets/banner.png" alt="LocalLLMAPI" width="100%" />
 
-A fast, lightweight, **local** API server that mimics OpenAI's endpoints
-(`/v1/chat/completions`, `/v1/models`), powered by `llama-cpp-python` with
-hardware acceleration (Vulkan / CUDA / CPU). It ships with a model manager,
-custom API keys, detailed usage logging and a web dashboard.
+  <p align="center">
+    <a href="#"><img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6.svg?style=flat-square&logo=windows" alt="Platform: Windows"></a>
+    <a href="#"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=flat-square&logo=python" alt="Python 3.10+"></a>
+    <a href="#"><img src="https://img.shields.io/badge/Local%20Inference-GGUF%20%2F%20llama.cpp-brightgreen.svg?style=flat-square" alt="llama.cpp"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
+  </p>
 
-Runs on **port 1000**.
+### Fast Local OpenAI-Compatible GGUF API Server & Dashboard
+*Powered by `llama-cpp-python` with Vulkan, CUDA, and CPU hardware acceleration (port `1000`).*
 
-## Features
+</div>
 
-- **OpenAI API compatibility** — works with the official Python/JS clients,
-  LangChain, Open WebUI and anything else that speaks the OpenAI protocol.
-- **Home dashboard** — last used model, total tokens, request count, average
-  and best tokens/s, models on disk, uptime, slot occupancy, recent requests.
-- **3 model slots** — each bound to a different device (`Vulkan` / `CUDA` /
-  `CPU`). Models are routed into the slot matching the API key's engine.
-- **Backend detection and one-click build** — the panel shows which GPU backend
-  is actually compiled into `llama-cpp-python` and builds a missing one on
-  request. A request for a backend that is not installed fails with a clear
-  provider error instead of quietly running on CPU.
-- **No duplicate loads** — concurrent requests for the same model share a
-  single in-memory instance instead of loading one per request.
-- **VRAM auto-unload** — models idle for more than 2 minutes are freed
-  automatically. Reload on demand from the panel or via `POST /api/unload`.
-- **API key management** — create, edit and delete keys, switch their engine,
-  track token usage per key.
-- **Detailed logging** — every request is recorded with TTFT, duration, token
-  count and tokens/s (avg / min / max), plus a 24-hour chart.
-- **In-app documentation** — the **Docs** tab covers reloading a model, what to
-  send to the API, every endpoint and every error, with runnable examples
-  filled in with your address and key.
-- **Collapsible sidebar** — click the logo (or `Ctrl`/`Cmd`+`B`) to collapse it
-  to icons. The state persists.
-- **Light & dark theme** — follows your OS preference, with a manual toggle.
-- **Polish / English** — switchable from the Settings tab.
-- **Works offline** — Chart.js, the Tabler icon font and every asset are served
-  locally. No CDN, no internet required once installed.
 
-## Requirements
+## 🌟 About
 
-- **Python 3.10+**
-- A `.gguf` model in `models/` (a small test model downloads automatically if
-  the folder is empty)
-- A C++ compiler — `llama-cpp-python` is built from source
-- For GPU acceleration: the **Vulkan SDK** (recommended) or the **CUDA Toolkit**
+**LocalLLMAPI** is a fast, lightweight local API server mimicking OpenAI's endpoints (`/v1/chat/completions`, `/v1/models`), powered by `llama-cpp-python` with hardware acceleration (**Vulkan / CUDA / CPU**). It ships with a model manager, custom API keys, detailed usage logging, and an offline web dashboard — and is the recommended local backend for **[CMDAI](https://github.com/DevP10TR/CMDAI)** and **[CMDAI-CODE](https://github.com/DevP10TR/CMDAI-CODE)**.
 
-## Backends are compiled in, not switched on
+---
 
-`llama-cpp-python` is built from source and the GPU backend is baked into that
-build. There is no runtime toggle:
+## 🚀 Key Features
 
-| `CMAKE_ARGS` | Result |
-| --- | --- |
-| *(unset)* | CPU only |
-| `-DGGML_VULKAN=on` | Vulkan — works with NVIDIA, AMD and Intel GPUs |
-| `-DGGML_CUDA=on` | CUDA — NVIDIA only |
+- ⚡ **OpenAI API Compatibility**: Works out of the box with CMDAI, CMDAI-CODE, official OpenAI Python/JS clients, LangChain, and Open WebUI (`/v1/chat/completions`, `/v1/models`).
+- 🎛️ **3 Device-Bound Model Slots**: Dedicated slots for `Vulkan`, `CUDA`, and `CPU` — requests are routed into the slot matching the API key's configured engine, with no duplicate in-memory loads.
+- 🧠 **Smart Context & VRAM Auto-Unload**: Automatic context-limit detection and idle VRAM cleanup after 2 minutes (or on demand via `POST /api/unload`).
+- 🛠️ **Backend Detection & One-Click Build**: Inspects compiled GPU backends in `llama-cpp-python` and builds missing Vulkan/CUDA wheels directly from **Settings → Backends**.
+- 🔑 **API Key Management & Detailed Telemetry**: Create/manage keys per engine, track TTFT, duration, token counts, tokens/s, and inspect 24-hour usage charts.
+- 🌐 **100% Offline Web Dashboard**: Plain HTML/CSS/JS dashboard served locally on `http://localhost:1000` with light/dark theme and Polish/English UI.
 
-`CMAKE_ARGS` is read **only** by `pip install`. Setting it afterwards changes
-nothing, and `--force-reinstall` on an existing install will not add a backend.
+---
 
-The **Vulkan SDK** and the **CUDA Toolkit** are needed to *compile*. To *run* a
-Vulkan build you do not need the SDK — Windows 10/11 already ships the Vulkan
-runtime.
+## 📥 Installation
 
-### Checking what you have
-
-Open the **Settings → Backends** tab. It lists CPU, Vulkan and CUDA with a real
-status, the exact `CMAKE_ARGS` each one needs, and a button that builds it for
-you. If a backend is missing but a slot or API key is assigned to it, the panel
-shows a warning on the Home screen and a request returns:
-
-```json
-HTTP 503
-{
-  "error": {
-    "error": "backend_unavailable",
-    "provider": "vulkan",
-    "provider_label": "Vulkan",
-    "message": "Vulkan backend is not available in this llama-cpp-python build ...",
-    "available": ["cpu"],
-    "missing_prereqs": [],
-    "fix": "POST /api/backends/vulkan/install"
-  }
-}
-```
-
-This is deliberate. Without it llama.cpp silently keeps the layers on CPU while
-the panel still claims Vulkan, so you would be waiting for a speed-up that never
-happens. A hard error is more useful than a lie.
-
-### Building a backend from the panel
-
-The **Install** button in **Settings → Backends** does it in two steps:
-
-1. `pip wheel` — compiles your current version with the right `CMAKE_ARGS` into
-   a `.whl`. Your existing install is untouched, so a failed compile changes
-   nothing.
-2. `pip install <wheel>` — swaps the package in. Seconds, because it is already
-   built.
-
-Both steps use `--no-deps`, so numpy and the other dependencies are never
-rebuilt. Compilation takes several minutes; the log is shown live. **Restart
-the server afterwards** — the DLLs of the old build are already loaded into the
-running process.
-
-If a prerequisite is missing (no Vulkan SDK, no CUDA Toolkit, no C++ compiler)
-the button is disabled and says which one.
-
-## Getting started
-
-**1. Install the dependencies**
-
-```bat
+### 1. Git Clone & Run
+```powershell
+git clone https://github.com/DevP10TR/LocalLLMAPI.git
+cd LocalLLMAPI
 pip install -r requirements.txt
 ```
 
-That gives you a CPU-only build. For GPU acceleration, install the
-[Vulkan SDK](https://vulkan.lunarg.com/) (or the CUDA Toolkit) and then either
-build it yourself:
-
+### 2. Optional GPU Acceleration (Vulkan / CUDA)
+For GPU acceleration, install the [Vulkan SDK](https://vulkan.lunarg.com/) or CUDA Toolkit, then either use **Settings → Backends → Install** in the dashboard or build `llama-cpp-python` directly:
 ```bat
 set CMAKE_ARGS=-DGGML_VULKAN=on
 pip install llama-cpp-python --upgrade --force-reinstall --no-deps
 ```
 
-…or just start the server and press **Install** in **Settings → Backends**.
-
-**2. Add a model** — put your `.gguf` files in `models/`.
-
-**3. Run it**
-
+### 3. Add Models & Start
+Place your `.gguf` files in `models/` (a small test model is downloaded automatically if empty) and launch:
 ```bat
-start.bat
+.\start.bat
 ```
+The server and web dashboard open at `http://localhost:1000`.
 
-That's it. The server starts and the dashboard opens at
-<http://localhost:1000>. Close the window or press `Ctrl`+`C` to stop.
+---
 
-## Connecting an app
+## 🔌 Connecting an App & Endpoints
 
 ```python
 from openai import OpenAI
@@ -157,49 +76,39 @@ for chunk in stream:
     print(chunk.choices[0].delta.content or "", end="", flush=True)
 ```
 
-The **Connection** tab shows ready-made snippets for Python, cURL and
-JavaScript with your LAN address already filled in. The **Docs** tab has the
-parameter reference, every endpoint and every error code — with a `curl`
-command you can copy and run as-is.
-
-## Endpoints
-
 | Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/v1/chat/completions` | Chat completion, streaming and non-streaming — requires a key |
-| `GET` | `/v1/models` | List of available models |
+| :--- | :--- | :--- |
+| `POST` | `/v1/chat/completions` | Chat completion (streaming & non-streaming, requires API key) |
+| `GET` | `/v1/models` | List available `.gguf` models |
 | `GET` | `/api/status` | Loaded models, slots, uptime, local IP, backend status |
 | `GET` | `/api/stats` | Aggregates for the Home dashboard |
-| `GET` | `/api/backends` | Which GPU backends are compiled in, and what each needs |
-| `POST` | `/api/backends/{engine}/install` | Rebuild `llama-cpp-python` with that backend (background) |
-| `POST` | `/api/backends/refresh` | Re-scan the installation |
+| `GET` | `/api/backends` | Installed GPU backends and prerequisites |
+| `POST` | `/api/backends/{engine}/install` | Build `llama-cpp-python` wheel for a backend |
 | `GET`/`POST`/`PUT`/`DELETE` | `/api/keys`, `/api/keys/{id}` | API key management |
 | `GET` | `/api/logs/{id}` | Request history for one key |
 | `GET`/`PUT` | `/api/settings/slots` | Slot → device mapping |
-| `POST` | `/api/unload` | Free models from memory |
+| `POST` | `/api/unload` | Free loaded models from memory |
 | `GET` | `/docs` | Interactive OpenAPI reference |
 
-## Files
+---
 
+## 🛠️ Project Structure
+
+```text
+LocalLLMAPI/
+├── start.bat                 # Server & dashboard launcher
+├── requirements.txt          # Python dependencies
+├── assets/                   # Banners and visual assets
+├── backend/                  # FastAPI/OpenAI router, model manager, DB & context limits
+├── web/                      # Offline dashboard (HTML, CSS, JS, local icons/charts)
+└── models/                   # Folder for local .gguf model weights
 ```
-start.bat              launches the server
-requirements.txt       dependencies
-backend/               server, database, model discovery
-web/                   the dashboard (plain HTML, CSS and JS — no build step)
-models/                your .gguf files
-logs.db                your API keys and request history
-```
 
-`models/` and `logs.db` are yours — they are not tracked by git, and deleting
-`logs.db` deletes your keys.
+> **Security Note**: Panel endpoints under `/api/*` are unauthenticated on the local network; change the host in `start.bat` from `0.0.0.0` to `127.0.0.1` if you want strictly localhost access.
 
-## Security note
+---
 
-The panel endpoints under `/api/*` are not authenticated. Anyone who can
-reach port 1000 on your network can create and delete keys. To restrict that,
-change the host in `start.bat` from `0.0.0.0` to `127.0.0.1` and use a
-firewall or an SSH tunnel for remote access.
+## 📄 License
 
-## License
-
-MIT — see [LICENSE](LICENSE).
+This software is provided under the MIT License. See the [LICENSE](LICENSE) file for details.  
+Copyright (c) 2026 LocalLLMAPI contributors.
